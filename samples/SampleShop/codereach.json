@@ -1,0 +1,5 @@
+{
+  // The sample's custom permission attribute implements no framework contract, so it is named here.
+  "authAttributes": ["HasPermission"],
+  "exclude": ["**/Migrations/**"]
+}

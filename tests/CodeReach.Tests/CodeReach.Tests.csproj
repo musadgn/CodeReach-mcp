@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/CodeReach.Core/CodeReach.Core.csproj" />
+    <ProjectReference Include="../../src/CodeReach.Roslyn/CodeReach.Roslyn.csproj" />
+    <ProjectReference Include="../../src/CodeReach.Mcp/CodeReach.Mcp.csproj" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+</Project>
