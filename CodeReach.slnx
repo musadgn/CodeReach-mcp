@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CodeReach.Core/CodeReach.Core.csproj" />
+    <Project Path="src/CodeReach.Mcp/CodeReach.Mcp.csproj" />
+    <Project Path="src/CodeReach.Roslyn/CodeReach.Roslyn.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CodeReach.Tests/CodeReach.Tests.csproj" />
+  </Folder>
+</Solution>
