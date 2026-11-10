@@ -173,6 +173,13 @@ internal static class SurveyTools
             report.Line("warning: " + warning);
         }
 
+        report.Data(new JsonObject
+        {
+            ["solution"] = Path.GetFileName(graph.Facts.SolutionPath),
+            ["state"] = host.DescribeState(),
+            ["documents"] = graph.Facts.Documents.Length,
+            ["projects"] = graph.Projects.Count,
+        });
         return report.Finish(lease);
     }
 

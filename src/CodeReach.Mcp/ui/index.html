@@ -3,11 +3,41 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>CodeReach</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-<main id="app"><p>Loading…</p></main>
+<div class="sheet">
+  <header class="titleblock" aria-label="Index">
+    <span class="mark">CodeReach</span>
+    <span id="solution">loading</span>
+    <span id="state">index</span>
+    <span id="completion"></span>
+  </header>
+
+  <section class="command" aria-label="Ask">
+    <label class="command-label" for="q">Method, type, route or command</label>
+    <div class="command-row">
+      <input id="q" type="text" autocomplete="off" spellcheck="false" role="combobox"
+             aria-expanded="false" aria-controls="suggestions" aria-autocomplete="list"
+             placeholder="Type.Method, /api/route, or impact">
+      <ul id="suggestions" class="suggestions" role="listbox" hidden></ul>
+    </div>
+    <div class="modes" role="group" aria-label="What to ask about a symbol">
+      <button class="mode" data-mode="trace" aria-pressed="true">Trace to entry points</button>
+      <button class="mode" data-mode="callers" aria-pressed="false">Callers</button>
+      <button class="mode" data-mode="callees" aria-pressed="false">Callees</button>
+      <button class="mode" data-mode="usages" aria-pressed="false">Usages</button>
+      <button class="mode" data-mode="hierarchy" aria-pressed="false">Hierarchy</button>
+      <button class="mode" data-mode="di" aria-pressed="false">DI</button>
+    </div>
+    <p class="hint"><kbd>/</kbd> focus · <kbd>Enter</kbd> ask · <kbd>Tab</kbd> next mode ·
+      also: <code>routes [text]</code>, <code>impact [base]</code>, <code>di</code>, <code>architecture</code>, or a route like <code>/api/orders</code>. Empty shows the health report.</p>
+  </section>
+
+  <main id="out" class="out" aria-live="polite"></main>
+</div>
 <script src="/app.js"></script>
 </body>
 </html>
