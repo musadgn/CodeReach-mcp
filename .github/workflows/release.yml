@@ -49,6 +49,9 @@ jobs:
             || { echo "::error::version mismatch"; exit 1; }
           grep -q "mcp-name: $(jq -r '.name' src/CodeReach.Mcp/.mcp/server.json)" README.md \
             || { echo "::error::README.md lacks the mcp-name line the MCP Registry verifies"; exit 1; }
+          description="$(jq -r '.description' src/CodeReach.Mcp/.mcp/server.json)"
+          [ "${#description}" -le 100 ] \
+            || { echo "::error::server.json description is ${#description} characters; the MCP Registry allows 100"; exit 1; }
           echo "version=$tag" >> "$GITHUB_OUTPUT"
 
       - run: dotnet restore CodeReach.slnx
