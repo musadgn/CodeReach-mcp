@@ -68,7 +68,7 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 75
     environment: release
     permissions:
       contents: write # GitHub release
@@ -119,16 +119,29 @@ jobs:
           tar xzf "$archive" mcp-publisher
           rm -f "$archive" "$archive.sigstore.json"
 
-      - name: Log in to the MCP Registry
-        run: ./mcp-publisher login github-oidc
+      # nuget.org validates and indexes a new version before it can be downloaded, which can take well over
+      # ten minutes, and the registry checks the package there. Wait for it first: a registry login token
+      # lives only a few minutes, so logging in must come after the wait.
+      - name: Wait until nuget.org serves the new version
+        run: |
+          id="codereach.mcp"
+          for attempt in $(seq 1 90); do
+            if curl -fsS "https://api.nuget.org/v3-flatcontainer/${id}/index.json" | jq -e --arg v "$VERSION" '.versions | index($v)' > /dev/null; then
+              echo "nuget.org lists ${VERSION}"
+              exit 0
+            fi
+            echo "waiting for nuget.org to index ${VERSION} (attempt ${attempt})"
+            sleep 30
+          done
+          echo "::error::nuget.org did not list ${VERSION} within 45 minutes; publish server.json by hand"
+          exit 1
 
-      # The registry checks the package on nuget.org, which takes minutes to index a new version.
       - name: Publish server.json to the MCP Registry
         working-directory: src/CodeReach.Mcp/.mcp
         run: |
-          for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            if "$GITHUB_WORKSPACE/mcp-publisher" publish; then exit 0; fi
-            echo "attempt $attempt failed; waiting for nuget.org to index ${VERSION}"
-            sleep 60
+          for attempt in 1 2 3 4 5; do
+            if "$GITHUB_WORKSPACE/mcp-publisher" login github-oidc && "$GITHUB_WORKSPACE/mcp-publisher" publish; then exit 0; fi
+            echo "attempt $attempt failed; retrying with a fresh login"
+            sleep 30
           done
           exit 1
