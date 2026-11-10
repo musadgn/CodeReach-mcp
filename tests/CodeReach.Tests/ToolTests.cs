@@ -25,6 +25,8 @@ public sealed class ToolTests(SampleFixture sample)
         ["entrypoints"] = "{}",
         ["impact"] = "{}",
         ["architecture"] = "{}",
+        ["type_hierarchy"] = """{"symbol":"INotifier"}""",
+        ["di_registrations"] = """{"symbol":"IOrderService"}""",
     };
 
     private CodeGraph Graph => sample.Graph;

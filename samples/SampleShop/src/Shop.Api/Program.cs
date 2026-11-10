@@ -17,7 +17,7 @@ builder.Services.AddScoped<IOrderPurger, OrderPurger>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<INotifier, EmailNotifier>();
 builder.Services.AddSingleton<PricingCalculator, DiscountedPricingCalculator>();
-builder.Services.AddHostedService<OrderPurgeService>();
+builder.Services.AddHostedService<OrderPurgeService>().AddShopInfrastructure();
 
 var app = builder.Build();
 app.MapControllers();
