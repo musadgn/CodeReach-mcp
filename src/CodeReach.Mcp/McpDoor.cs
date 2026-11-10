@@ -3,6 +3,8 @@ using CodeReach.Core.Tools;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using CodeReach.Core.Queries;
+using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 
 namespace CodeReach.Mcp;
@@ -23,6 +25,13 @@ internal static class McpDoor
             InputSchema = JsonDocument.Parse(tool.InputSchema()).RootElement,
             Annotations = new ToolAnnotations { ReadOnlyHint = true, OpenWorldHint = false },
         }).ToList();
+        var prompts = PromptRegistry.All.Select(prompt => new Prompt
+        {
+            Name = prompt.Name,
+            Title = prompt.Title,
+            Description = prompt.Description,
+            Arguments = [.. prompt.Args.Select(a => new PromptArgument { Name = a.Name, Description = a.Description, Required = a.Required })],
+        }).ToList();
         builder.Services
             .AddMcpServer(server =>
             {
@@ -35,6 +44,28 @@ internal static class McpDoor
             })
             .WithStdioServerTransport()
             .WithListToolsHandler((_, _) => ValueTask.FromResult(new ListToolsResult { Tools = tools }))
+            .WithListPromptsHandler((_, _) => ValueTask.FromResult(new ListPromptsResult { Prompts = prompts }))
+            .WithGetPromptHandler((request, _) =>
+            {
+                var name = request.Params?.Name ?? string.Empty;
+                var given = request.Params?.Arguments?.ToDictionary(p => p.Key, p => p.Value.ToString(), StringComparer.Ordinal)
+                    ?? new Dictionary<string, string>(StringComparer.Ordinal);
+                string text;
+                try
+                {
+                    text = PromptRegistry.Render(name, given);
+                }
+                catch (ToolRefusal refusal)
+                {
+                    throw new McpException(refusal.Message);
+                }
+
+                return ValueTask.FromResult(new GetPromptResult
+                {
+                    Description = PromptRegistry.All.First(p => p.Name == name).Description,
+                    Messages = [new PromptMessage { Role = Role.User, Content = new TextContentBlock { Text = text } }],
+                });
+            })
             .WithCallToolHandler(async (request, token) =>
             {
                 var arguments = request.Params?.Arguments is { } given ? JsonSerializer.SerializeToElement(given) : default;

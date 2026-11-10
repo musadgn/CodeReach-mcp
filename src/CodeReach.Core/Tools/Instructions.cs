@@ -8,12 +8,17 @@ public static class Instructions
     public static string Build(CodeReachConfig config, string solutionPath)
     {
         var text = new StringBuilder()
-            .Append("CodeReach answers from a compiler-accurate index of ").Append(Path.GetFileName(solutionPath)).Append(". ")
-            .Append("Every answer is bound by the C# semantic model: comments and strings never count, and calls through interfaces and base classes are resolved. ")
-            .Append("Start from trace_to_entrypoints (what reaches this code), impact (what a diff affects) or routes (endpoints and their authorization). ")
-            .Append("Name symbols as Type.Member, as path/File.cs:line, or with an id copied from an answer; an ambiguous name is refused with the candidates. ")
-            .Append("Test projects are excluded unless include_tests=true, and each answer says how many rows that hid. ")
-            .Append("Read the last line of every answer: 'analysis: PARTIAL' means rows may be missing, and a first line starting with STALE means the index is behind the files. ")
+            .Append("CodeReach answers from a compiler-accurate index of ").Append(Path.GetFileName(solutionPath)).Append(" built with Roslyn: ")
+            .Append("comments and strings never count, calls through interfaces and base classes are resolved, and test projects are excluded unless include_tests=true. ")
+            .Append("Prefer it over grep and file search for any C# question about symbols. ")
+            .Append("Before changing a method or type: trace_to_entrypoints (which endpoints and jobs reach it) and callers. ")
+            .Append("Before changing an interface, base class or virtual member: type_hierarchy (every implementation that shares the contract). ")
+            .Append("When adding a service, a constructor parameter or a background job: di_registrations (where and with which lifetime things are registered; it also reports captive dependencies and unregistered services). ")
+            .Append("When adding or reviewing an endpoint: routes (verb, full route, authorization). ")
+            .Append("After editing, before finishing: impact (the endpoints and jobs the diff affects). ")
+            .Append("To learn how existing code works: callees down from a handler, find_usages for exact references, architecture for the project layout. ")
+            .Append("Name symbols as Type.Member, path/File.cs:line, or an id from an answer; an ambiguous name is refused with the candidates. ")
+            .Append("Read the last line of each answer: 'analysis: PARTIAL' means rows may be missing; a first line starting with STALE means the index is catching up with the files. ")
             .Append("An error starts with a CODE and says what to do next.");
         if (config.AuthAttributes.Length > 0)
         {

@@ -37,6 +37,12 @@ public sealed class WireTests
         var routes = await client.CallToolAsync("routes", new Dictionary<string, object?> { ["auth"] = "none", ["limit"] = 100 }, cancellationToken: cancel);
         Assert.Contains("7 of 18 endpoints", Text(routes), StringComparison.Ordinal);
 
+        var prompts = await client.ListPromptsAsync(cancellationToken: cancel);
+        Assert.Equal(PromptRegistry.All.Select(p => p.Name).Order(), prompts.Select(p => p.Name).Order());
+        var prompt = await client.GetPromptAsync("before-change", new Dictionary<string, object?> { ["symbol"] = "OrderService.CancelAsync" }, cancellationToken: cancel);
+        var promptText = string.Concat(prompt.Messages.Select(m => m.Content).OfType<TextContentBlock>().Select(c => c.Text));
+        Assert.Contains("I am about to change OrderService.CancelAsync.", promptText, StringComparison.Ordinal);
+
         var refusal = await client.CallToolAsync("callers", new Dictionary<string, object?> { ["symbol"] = "Delete" }, cancellationToken: cancel);
         Assert.True(refusal.IsError);
         Assert.StartsWith("AMBIGUOUS_SYMBOL:", Text(refusal), StringComparison.Ordinal);
