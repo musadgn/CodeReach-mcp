@@ -49,6 +49,8 @@ because it is an entry point and nothing calls it.
 | Reference | From-symbol id, to-symbol id, kind, file, line, and for calls the static type of the receiver |
 | Endpoint mapping | Minimal API: handler id, verb, template, where the route prefix comes from, auth calls in the chain |
 | Group argument | A route-builder value passed to a method parameter, with the prefix known at that point |
+| Service registration | Service and implementation type keys, lifetime, registration method, line, the calling symbol, details (factory, instance, key, open generic, conditional, through which generic helper) |
+| Dependency | One constructor parameter of a source type: the constructor, ordinal, type key, and whether it asks for `IEnumerable<T>` |
 
 Reference kinds: `invoke`, `construct`, `methodGroup`, `read`, `write`, `nameof`, `typeRef`, `attribute`,
 `baseCall`. A reference is recorded for every bound name in the document: source symbols and metadata
@@ -153,8 +155,8 @@ as **unrooted**, so reach lost to reflection or dependency injection is shown ra
 
 ## 6 Tool surface
 
-Eleven coarse tools, each one record in the registry. Both doors loop over the registry, so MCP and CLI
-cannot drift.
+Thirteen coarse tools and five prompts, each one record in a registry. Both doors loop over the registries,
+so MCP and CLI cannot drift.
 
 | Tool | Answers |
 |---|---|
@@ -168,6 +170,12 @@ cannot drift.
 | `entrypoints` | All roots by kind |
 | `impact` | A base ref or diff text → changed symbols → affected endpoints and jobs |
 | `architecture` | Projects, dependency edges weighted by real references, layers, hotspots |
+| `type_hierarchy` | Bases, derived and implementing types (direct or indirect), members and what they implement or override, registrations |
+| `di_registrations` | Registrations and constructor dependencies; captive dependencies, injected-but-unregistered types, double registrations |
+
+**Prompts** (`review-diff`, `before-change`, `add-feature`, `audit-auth`, `explain-endpoint`) are ready-made
+requests that name the tools to call in order. They live in Core beside the tool registry; the MCP door
+serves them as MCP prompts. A test checks that every tool and parameter they name exists.
 
 **Addressing.** A symbol argument is a documentation id, a qualified-name suffix
 (`OrderService.CancelAsync`), or a `file:line` location. Overloads of one member and the members of one

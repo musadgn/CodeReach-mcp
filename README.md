@@ -69,9 +69,9 @@ entry points that reach OrderRepository.HardDeleteAsync(Guid)
   ...
 ```
 
-CodeReach is a plain MCP server. It installs no hooks, skills or agent profiles, never edits your client
-configuration, and writes nothing into the solution it analyses. Its index lives in your user cache
-directory.
+CodeReach is a plain MCP server that runs entirely on your machine: no account, no hosted service, nothing
+sent anywhere. It installs no hooks, skills or agent profiles, never edits your client configuration, and
+writes nothing into the solution it analyses. Its index lives in your user cache directory.
 
 ## Tools
 
@@ -85,7 +85,22 @@ directory.
 | `find_symbol` | Declarations by name |
 | `entrypoints` | All roots a trace can stop at |
 | `architecture` | Projects, how much each really uses the others, most-called methods, most-implemented interfaces |
+| `type_hierarchy` | What a type inherits and implements, every type deriving from it (direct or indirect), its members and what each implements or overrides |
+| `di_registrations` | Every `AddScoped`/`AddSingleton`/`AddTransient`/`TryAdd`/keyed/hosted/`AddHttpClient`/`AddDbContext` registration and what each constructor asks for; reports **captive dependencies**, **injected but unregistered** services, and double registrations |
 | `status` / `reindex` | Index state and freshness; force a refresh |
+
+### Prompts
+
+Ready-made requests that tell the agent which tools to call, in order. Every MCP client shows them; in
+Claude Code they appear as `/mcp__codereach__<name>`.
+
+| Prompt | Does |
+|---|---|
+| `review-diff` | What your change affects: endpoints with auth, jobs, implementations that must change too, DI problems |
+| `before-change` | The blast radius of changing one symbol, and which tests cover it |
+| `add-feature` | Finds how similar features are built here and plans the files to add, following the same layers |
+| `audit-auth` | Endpoints with no authorization or anonymous access, ranked by risk |
+| `explain-endpoint` | One endpoint from route to data access, through every layer |
 
 A symbol is named as `Type.Member`, as `path/File.cs:line`, or with an id from an earlier answer. An
 ambiguous name is refused with the candidates listed. Every tool is also a shell command:
@@ -136,7 +151,8 @@ and Azure Functions.
 
 - Implicit user-defined conversions, and the calls behind `foreach`, `using`, `await`, deconstruction and
   collection initializers.
-- Reflection, and constructors invoked by a dependency injection container.
+- Reflection, and constructors invoked by a dependency injection container (registrations themselves are
+  read by `di_registrations`, except those made by assembly scanning or inside a library).
 - Calls through an interface with several implementations are reported for every implementation the
   receiver's static type allows, and each hop says how many candidates there were.
 - Global authorization (a fallback policy, a global authorize filter) is detected and reported next to

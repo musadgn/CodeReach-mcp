@@ -129,8 +129,10 @@ Estimates are focused working sessions. A STATUS line is appended in place when 
 | 6 | Packaging: tool package, `server.json`, README, local `dnx` run | 0.5 | Package installed from a local feed into a temp tool path runs against the sample over stdio |
 | 7 | **[DECIDE]** publish to NuGet, MCP Registry entry, first GitHub release | — | Owner go-ahead only |
 | 8 | Semantic ratchet (section 7a). Starts only after phases 1 to 5 are verified on the local large solution | 1.5 | On the sample: each counter kind equals a hand-audited count; growth exits 1, a counter that cannot run exits 2 and leaves the baseline untouched, `--check` never writes and reports a shrink as a finding |
+| 9 | Built for feature work (section 7b): `type_hierarchy`, `di_registrations`, MCP prompts, task-oriented instructions | 1 | On the sample: registrations equal a hand-audited list and a text oracle's count; the planted captive dependency and unregistered service are reported and nothing else; prompts name only real tools and parameters and are served over stdio. On the large solution: registration count equals an independent count |
+| 10 | Local UI (section 7c), after the owner has used 0.2.0 | 1.5 | `codereach ui` serves on 127.0.0.1 only, random port, one-time token; every screen's numbers equal the matching tool's answer |
 
-STATUS 2026-11-10 (what verified each phase; the suite is `dotnet test --project tests/CodeReach.Tests`, 45 tests, xUnit v3 on the sample):
+STATUS 2026-11-10 (what verified each phase; the suite is `dotnet test --project tests/CodeReach.Tests`, xUnit v3 on the sample; CI runs it on Ubuntu, Windows and macOS):
 
 | # | Status | Verified by |
 |---|---|---|
@@ -140,10 +142,17 @@ STATUS 2026-11-10 (what verified each phase; the suite is `dotnet test --project
 | 3 | shipped | `ToolTests`: impact of a repository edit and of an edit outside any declaration, from diff text. The `git diff` path itself is unverified by a test |
 | 4 | shipped | `WireTests`: the built server driven over stdio by the SDK client; lists all 11 tools, calls three, checks a refusal |
 | 5 | shipped | `IncrementalTests`: after a body edit, a new member, a constant change, a file added and a file removed, the incremental facts hash equals a from-scratch index; a fresh snapshot is served with no workspace loaded. The file watcher and the idle release are unverified by a test |
-| 6 | shipped, unpublished | Packed to a local feed, installed with `dotnet tool install --tool-path` into a temp directory, CLI call and a raw JSON-RPC handshake (initialize, tools/list, tools/call) run against the sample. Running through `dnx` is unverified |
+| 6 | shipped | Packed to a local feed, installed with `dotnet tool install --tool-path` into a temp directory, CLI call and a raw JSON-RPC handshake (initialize, tools/list, tools/call) run against the sample. `dnx CodeReach.Mcp --yes -- version` run against nuget.org after release |
+| 7 | shipped 0.1.0 | NuGet `CodeReach.Mcp` 0.1.0 (trusted publishing), GitHub release `v0.1.0`, MCP Registry `io.github.musadgn/codereach-mcp` 0.1.0. The registry step failed in CI (description over 100 characters, NuGet base URL must be the v3 index); both fixed and published by hand, and the release workflow now checks the length |
+| 9 | built, unreleased | `ContainerTests` (audited list of 16 registrations, text oracle, generic helper, constructor dependencies, captive and unregistered findings, a type/member name clash), `PromptTests`, `WireTests` (prompts over stdio). Suite: 58 tests. Large solution: 379 registrations, equal to the independent count (347 calls in the text, minus one helper line, plus its 33 call sites); 0 captive dependencies and 0 unregistered services, spot-checked on a job that uses `IServiceScopeFactory` |
 
-**CI: pending owner review.** No workflow or dependabot file is created until the owner has rechecked the
-CI plan. Until then every gate above is run locally and reported with what ran it.
+**CI** (approved 2026-11-10): `ci.yml` builds with warnings as errors, tests on three operating systems,
+checks formatting and smoke-tests the packed tool over stdio; `release.yml` publishes on a version tag after
+the owner approves the `release` environment; Dependabot groups Roslyn, Microsoft.Extensions and xunit updates.
+
+**Cost constraint (owner, 2026-11-10).** CodeReach is free and runs entirely on the user's machine: index in
+memory and in the user's cache folder, any UI on a loopback port served by the tool itself. No hosted
+service, account or paid infrastructure, ever.
 
 ### 7a Semantic ratchet (planned, not started)
 
@@ -155,6 +164,34 @@ run is exit 2, never 0 or 1, and never rewrites the baseline. A shrink tightens 
 `--check` never writes and treats a shrink as a finding so the tighter file gets committed. Exposed as
 `codereach ratchet [--check]` and as MCP tools through the same registry. Counter kinds are a compiled-in
 list of self-describing entries; nothing named in a config file is ever executed.
+
+### 7b Built for feature work (phase 9)
+
+What an agent needs while building a feature in a large .NET codebase that generic tools get wrong. Basic
+navigation (text search, file outline, reading a file) is deliberately not built: every agent has it.
+
+- `type_hierarchy`: bases, every derived or implementing type marked direct or indirect, members with what
+  each implements or overrides, and the type's registrations.
+- `di_registrations`: every registration call (lifetime methods, TryAdd, keyed, AddHostedService,
+  AddHttpClient, AddDbContext; generic, typeof, factory and instance forms) and every constructor parameter.
+  Services are keyed by constructed type, so `ChannelReader<A>` and `ChannelReader<B>` are different services,
+  while an open generic registration satisfies any construction. A generic helper in the same project that
+  registers its own type parameter is recorded at each of its call sites with the type argument substituted.
+  Findings: captive dependencies (a singleton whose constructor takes a service registered only as scoped),
+  interfaces and abstract types injected into container-built types with no registration, and services
+  registered more than once (keyed registrations excluded). Not seen, and said so: assembly scanning, a
+  library's own Add* methods, registrations outside the solution, helpers in another project.
+  Known gap: a body-only edit to a generic registration helper does not re-extract the files that call it.
+- Prompts: `review-diff`, `before-change`, `add-feature`, `audit-auth`, `explain-endpoint`, served through MCP
+  prompts so every client gets them without installing anything.
+- Instructions: a task-to-tool guide (before changing X call Y), generated, under the length cap.
+
+### 7c Local UI (phase 10, planned)
+
+`codereach ui` opens a page on 127.0.0.1 with a random port and a one-time token in the URL, served by the
+tool from files inside the package (no npm, no build step). Screens in order of value: routes with auth
+filters, trace from a symbol to its entry points, impact of the working tree or a branch, architecture, and a
+small graph of one trace. Every screen calls the same tool registry, so the UI cannot disagree with the tools.
 
 Local validation (not in the repo, not in CI): after phases 1, 2 and 5 the server is run read-only against a
 large private solution and compared with ground truths obtained by grep. Results are recorded in the
