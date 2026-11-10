@@ -3,41 +3,97 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="dark">
 <title>CodeReach</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-<div class="sheet">
-  <header class="titleblock" aria-label="Index">
-    <span class="mark">CodeReach</span>
-    <span id="solution">loading</span>
-    <span id="state">index</span>
-    <span id="completion"></span>
-  </header>
+<header class="topbar">
+  <span class="brand">CODEREACH</span>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button role="tab" data-tab="overview">Overview</button>
+    <button role="tab" data-tab="explore">Explore</button>
+    <button role="tab" data-tab="graph">Graph</button>
+    <button role="tab" data-tab="routes">Routes</button>
+    <button role="tab" data-tab="di">DI</button>
+    <button role="tab" data-tab="architecture">Architecture</button>
+  </nav>
+  <span class="index-state"><span class="dot" id="dot"></span><span id="index-text">loading</span></span>
+  <span class="solution" id="solution">…</span>
+</header>
 
-  <section class="command" aria-label="Ask">
-    <label class="command-label" for="q">Method, type, route or command</label>
-    <div class="command-row">
-      <input id="q" type="text" autocomplete="off" spellcheck="false" role="combobox"
-             aria-expanded="false" aria-controls="suggestions" aria-autocomplete="list"
-             placeholder="Type.Method, /api/route, or impact">
-      <ul id="suggestions" class="suggestions" role="listbox" hidden></ul>
+<main id="views">
+  <section class="view" id="view-overview" hidden></section>
+
+  <section class="view explore" id="view-explore" hidden>
+    <aside class="explorer">
+      <div class="pane-title">Explorer</div>
+      <input id="file-filter" class="field" type="search" placeholder="Filter files" autocomplete="off" spellcheck="false">
+      <div id="tree" class="tree" role="tree"></div>
+    </aside>
+    <div class="code-pane">
+      <div class="code-head">
+        <div id="crumbs" class="crumbs">Pick a file</div>
+        <div id="file-impact" class="impact"></div>
+      </div>
+      <div id="code" class="code" tabindex="0"></div>
     </div>
-    <div class="modes" role="group" aria-label="What to ask about a symbol">
-      <button class="mode" data-mode="trace" aria-pressed="true">Trace to entry points</button>
-      <button class="mode" data-mode="callers" aria-pressed="false">Callers</button>
-      <button class="mode" data-mode="callees" aria-pressed="false">Callees</button>
-      <button class="mode" data-mode="usages" aria-pressed="false">Usages</button>
-      <button class="mode" data-mode="hierarchy" aria-pressed="false">Hierarchy</button>
-      <button class="mode" data-mode="di" aria-pressed="false">DI</button>
-    </div>
-    <p class="hint"><kbd>/</kbd> focus · <kbd>Enter</kbd> ask · <kbd>Tab</kbd> next mode ·
-      also: <code>routes [text]</code>, <code>impact [base]</code>, <code>di</code>, <code>architecture</code>, or a route like <code>/api/orders</code>. Empty shows the health report.</p>
+    <aside class="side-graph">
+      <div class="graph-toolbar small">
+        <span id="side-title" class="side-title">Select a declaration</span>
+        <select id="side-dir" class="field" aria-label="Direction">
+          <option value="both">Both</option>
+          <option value="out">Outgoing</option>
+          <option value="in">Incoming</option>
+        </select>
+        <button id="side-open" class="btn">Open in Graph</button>
+      </div>
+      <div id="side-canvas" class="canvas"></div>
+    </aside>
   </section>
 
-  <main id="out" class="out" aria-live="polite"></main>
-</div>
+  <section class="view graph-view" id="view-graph" hidden>
+    <div class="graph-toolbar">
+      <button id="g-back" class="btn" title="Back">← Back</button>
+      <button id="g-forward" class="btn" title="Forward">Forward →</button>
+      <div class="search">
+        <input id="g-search" class="field" type="search" placeholder="Find a method, type or property" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="g-suggest">
+        <ul id="g-suggest" class="suggest" role="listbox" hidden></ul>
+      </div>
+      <select id="g-dir" class="field" aria-label="Direction">
+        <option value="out">Outgoing</option>
+        <option value="in">Incoming</option>
+        <option value="both">Both</option>
+      </select>
+      <details class="dropdown" id="g-kinds">
+        <summary class="btn">Edge types</summary>
+        <div class="dropdown-body" id="g-kinds-body"></div>
+      </details>
+      <span class="stepper"><button id="g-less" class="btn" aria-label="Fewer layers">−</button><span id="g-depth">1 layer</span><button id="g-more" class="btn">Expand +1</button></span>
+      <button id="g-trace" class="btn">Path to entry points</button>
+      <span class="seg" role="group" aria-label="Layout">
+        <button id="g-force" class="btn" aria-pressed="true">Graph</button><button id="g-tree" class="btn" aria-pressed="false">Tree</button>
+      </span>
+      <label class="check"><input id="g-external" type="checkbox"> framework</label>
+      <span id="g-count" class="count"></span>
+      <button id="g-fit" class="btn">Fit view</button>
+    </div>
+    <div class="graph-body">
+      <div id="g-canvas" class="canvas"></div>
+      <aside id="details" class="details" hidden></aside>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section class="view" id="view-routes" hidden></section>
+  <section class="view" id="view-di" hidden></section>
+  <section class="view arch" id="view-architecture" hidden></section>
+</main>
+
+<footer class="statusbar">
+  <span id="status-left">server connecting</span>
+  <span id="status-right"></span>
+</footer>
 <script src="/app.js"></script>
 </body>
 </html>

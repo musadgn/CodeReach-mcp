@@ -83,6 +83,49 @@ public sealed class UiServerTests(SampleFixture sample)
         Assert.StartsWith("AMBIGUOUS_SYMBOL:", refusal["text"]!.GetValue<string>(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Explorer_serves_indexed_files_only_and_graphs_from_the_same_relations()
+    {
+        await using var server = UiServer.Start(new FixedHost(sample.Graph, SampleFixture.Config));
+        using var client = new HttpClient();
+        var cancel = TestContext.Current.CancellationToken;
+
+        async Task<(HttpStatusCode Status, JsonObject? Body)> Get(string path)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, server.Origin + path);
+            request.Headers.Add("X-CodeReach-Token", server.Token);
+            var response = await client.SendAsync(request, cancel);
+            return (response.StatusCode, await response.Content.ReadFromJsonAsync<JsonObject>(cancel));
+        }
+
+        // Only files in the index are readable: no traversal, no absolute paths, no unindexed files.
+        foreach (var path in new[] { "../../../../etc/passwd", "/etc/passwd", "samples/SampleShop/codereach.json", "src/Shop.Api/Shop.Api.csproj" })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, (await Get("/api/explore/file?path=" + Uri.EscapeDataString(path))).Status);
+        }
+
+        var file = await Get("/api/explore/file?path=" + Uri.EscapeDataString("src/Shop.Application/Orders/OrderService.cs"));
+        Assert.Equal(HttpStatusCode.OK, file.Status);
+        Assert.Contains("class OrderService", file.Body!["text"]!.GetValue<string>(), StringComparison.Ordinal);
+
+        var files = await Get("/api/explore/files");
+        Assert.Equal(sample.Graph.Facts.Documents.Length, files.Body!["projects"]!.AsArray().Sum(p => p!["files"]!.AsArray().Count));
+
+        // Incoming calls in the graph equal the callers tool: OrderPurger.PurgeAsync has 3 non-test callers.
+        var graph = await Get("/api/explore/graph?dir=in&kinds=calls&id=" + Uri.EscapeDataString("OrderPurger.PurgeAsync"));
+        var center = graph.Body!["center"]!.GetValue<string>();
+        var callers = graph.Body!["edges"]!.AsArray().Where(e => e!["to"]!.GetValue<string>() == center).Select(e => e!["from"]!.GetValue<string>()).Distinct().Count();
+        Assert.Equal(sample.Graph.Callers(center).Where(e => !e.Row.IsTest).Select(e => e.Row.Fact.From).Distinct().Count(), callers);
+        Assert.Equal(3, callers);
+
+        var ambiguous = await Get("/api/explore/graph?id=Delete");
+        Assert.Equal((HttpStatusCode)422, ambiguous.Status);
+        Assert.StartsWith("AMBIGUOUS_SYMBOL:", ambiguous.Body!["error"]!.GetValue<string>(), StringComparison.Ordinal);
+
+        using var noToken = new HttpRequestMessage(HttpMethod.Get, server.Origin + "/api/explore/files");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(noToken, cancel)).StatusCode);
+    }
+
     private static HttpRequestMessage Call(UiServer server, string tool, string args = "{}", string? token = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, server.Origin + "/api/call")

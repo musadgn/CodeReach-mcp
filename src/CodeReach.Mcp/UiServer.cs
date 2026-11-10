@@ -178,6 +178,9 @@ internal sealed class UiServer : IAsyncDisposable
             case ("POST", "/api/call"):
                 await CallAsync(request, response).ConfigureAwait(false);
                 return;
+            case ("GET", _) when path.StartsWith("/api/explore/", StringComparison.Ordinal):
+                await ExploreAsync(path["/api/explore/".Length..], request.QueryString, response).ConfigureAwait(false);
+                return;
             default:
                 await WriteAsync(response, 404, "text/plain; charset=utf-8", "not found").ConfigureAwait(false);
                 return;
@@ -228,6 +231,54 @@ internal sealed class UiServer : IAsyncDisposable
             ["data"] = result.Data,
         }).ConfigureAwait(false);
     }
+
+    private async Task ExploreAsync(string what, System.Collections.Specialized.NameValueCollection query, HttpListenerResponse response)
+    {
+        try
+        {
+            var lease = await _host.AcquireAsync(_stop.Token).ConfigureAwait(false);
+            var graph = lease.Graph;
+            JsonObject? body = what switch
+            {
+                "files" => Explorer.Files(graph),
+                "file" => Explorer.File(graph, query["path"] ?? string.Empty),
+                "projects" => Explorer.ProjectGraph(graph),
+                "node" => Explorer.Details(graph, Explorer.Resolve(graph, Required(query, "id"))),
+                "graph" => Explorer.Neighborhood(
+                    graph,
+                    Explorer.Resolve(graph, Required(query, "id")),
+                    query["dir"] is "in" or "both" ? query["dir"]! : "out",
+                    Math.Clamp(int.TryParse(query["depth"], out var depth) ? depth : 1, 1, 4),
+                    (query["kinds"] ?? string.Join(',', Explorer.EdgeKinds)).Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal),
+                    query["external"] == "1",
+                    query["tests"] == "1"),
+                _ => null,
+            };
+            if (body is null)
+            {
+                await WriteJsonAsync(response, 404, new JsonObject { ["error"] = "not found" }).ConfigureAwait(false);
+                return;
+            }
+
+            body["index"] = new JsonObject
+            {
+                ["generation"] = graph.Generation,
+                ["builtAt"] = graph.BuiltAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+                ["complete"] = graph.Completion.IsComplete,
+                ["notice"] = lease.Notice,
+            };
+            await WriteJsonAsync(response, 200, body).ConfigureAwait(false);
+        }
+        catch (CodeReach.Core.Queries.ToolRefusal refusal)
+        {
+            await WriteJsonAsync(response, 422, new JsonObject { ["error"] = refusal.Message }).ConfigureAwait(false);
+        }
+    }
+
+    private static string Required(System.Collections.Specialized.NameValueCollection query, string name) =>
+        query[name] is { Length: > 0 and <= Limits.MaxSymbolLength } value
+            ? value
+            : throw new CodeReach.Core.Queries.ToolRefusal(CodeReach.Core.Queries.Codes.ValidationFailed, $"'{name}' is required.");
 
     private static string Resource(string name)
     {
