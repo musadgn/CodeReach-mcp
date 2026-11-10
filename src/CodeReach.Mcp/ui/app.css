@@ -112,7 +112,7 @@ select.field { padding: 4px 6px; }
 
 .stepper { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
 
-.count { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
+.count { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 .dropdown { position: relative; }
 .dropdown > summary { list-style: none; }
@@ -186,6 +186,9 @@ select.field { padding: 4px 6px; }
 .node.external text { fill: var(--muted); }
 .node:hover circle { stroke: var(--amber); stroke-width: 3; }
 .node.project circle { fill: #9fb4c8; }
+.node.cluster circle { fill: #2a3240; stroke: #9fb4c8; stroke-width: 1.5; stroke-dasharray: 3 2; }
+.node.cluster.entry circle { stroke: var(--coral); }
+.node.cluster text { fill: #b9c6d4; font-weight: 600; }
 
 .legend { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 14px; padding: 6px 10px; background: rgba(20, 23, 29, 0.85); border: 1px solid var(--line); border-radius: 6px; color: var(--muted); font-size: 11px; pointer-events: none; }
 .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }

@@ -119,6 +119,21 @@ function stamp(index) {
 
 // ---- graph renderer ---------------------------------------------------------------------------
 
+const measure = (() => {
+  const context = document.createElement('canvas').getContext('2d');
+  return (text, bold) => {
+    context.font = `${bold ? '700 ' : ''}13px -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif`;
+    return context.measureText(text).width;
+  };
+})();
+
+// Long signatures make a graph unreadable; the full name stays in the tooltip and the details panel.
+function shortLabel(display) {
+  const text = String(display);
+  const open = text.indexOf('(');
+  return open > 0 && text.length > 34 && !text.endsWith('()') ? text.slice(0, open) + '(…)' : text;
+}
+
 class GraphView {
   constructor(host, options) {
     this.host = host;
@@ -187,13 +202,74 @@ class GraphView {
 
   set(data, layout) {
     this.host.querySelector('.empty')?.remove();
+    if (this.raw?.center !== data.center) this.expanded = new Set();
+    this.raw = data;
+    this.layout = layout;
+    data = this.clustered(data);
     this.center = data.center;
     this.nodes = data.nodes.map(n => ({ ...n }));
+    for (const n of this.nodes) {
+      n.text = n.label || shortLabel(n.display);
+      n.radius = n.id === this.center ? 9 : n.kind === 'cluster' ? 8 : n.entry || n.kind === 'type' || n.kind === 'project' || n.kind === 'test project' ? 7 : 5;
+      n.w = measure(n.text, n.id === this.center) + n.radius + 10;
+    }
     this.byId = new Map(this.nodes.map(n => [n.id, n]));
     this.edges = data.edges.filter(e => this.byId.has(e.from) && this.byId.has(e.to)).map(e => ({ ...e }));
-    if (layout === 'tree') this.layoutTree(); else this.layoutForce();
+    this.tree = layout === 'tree';
+    if (this.tree) this.layoutTree(); else { this.layoutForce(); this.separate(); }
     this.draw();
     this.fit();
+  }
+
+  // A layer with more than 30 nodes is grouped by class, so a hub with hundreds of callers stays readable.
+  // Clicking a group opens it.
+  clustered(data) {
+    this.expanded = this.expanded || new Set();
+    const owner = n => {
+      const name = String(n.display);
+      const head = name.includes('(') ? name.slice(0, name.indexOf('(')) : name;
+      const dot = head.lastIndexOf('.');
+      return dot > 0 ? head.slice(0, dot) : null;
+    };
+    const layers = new Map();
+    for (const n of data.nodes) {
+      if (n.id === data.center) continue;
+      if (!layers.has(n.layer)) layers.set(n.layer, []);
+      layers.get(n.layer).push(n);
+    }
+    const replace = new Map();
+    const clusters = [];
+    for (const [layer, members] of layers) {
+      if (members.length <= 30) continue;
+      const groups = new Map();
+      for (const n of members) {
+        const key = owner(n);
+        if (!key) continue;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(n);
+      }
+      for (const [name, group] of groups) {
+        const id = `cluster:${layer}:${name}`;
+        if (group.length < 2 || this.expanded.has(id)) continue;
+        group.forEach(n => replace.set(n.id, id));
+        clusters.push({
+          id, kind: 'cluster', layer, display: name, label: `${name}  ·  ${group.length}`,
+          entry: group.some(n => n.entry), members: group.map(n => n.display),
+        });
+      }
+    }
+    if (!replace.size) return data;
+    const nodes = data.nodes.filter(n => !replace.has(n.id)).concat(clusters);
+    const edges = new Map();
+    for (const e of data.edges) {
+      const from = replace.get(e.from) || e.from;
+      const to = replace.get(e.to) || e.to;
+      if (from === to) continue;
+      const key = `${from}|${to}|${e.kind}`;
+      const existing = edges.get(key);
+      if (existing) existing.count += e.count; else edges.set(key, { from, to, kind: e.kind, count: e.count });
+    }
+    return { ...data, nodes, edges: [...edges.values()] };
   }
 
   layoutForce() {
@@ -246,6 +322,33 @@ class GraphView {
     }
   }
 
+  // Node labels are boxes, not points: push apart any two whose boxes overlap, mostly vertically.
+  separate() {
+    const nodes = this.nodes;
+    for (let pass = 0; pass < 80; pass++) {
+      let moved = false;
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i];
+          const b = nodes[j];
+          const overlapX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x - a.radius - 4, b.x - b.radius - 4);
+          const overlapY = 24 - Math.abs(a.y - b.y);
+          if (overlapX > 0 && overlapY > 0) {
+            const push = overlapY / 2 + 1;
+            const up = a.y < b.y || (a.y === b.y && i < j);
+            const fixedA = a.id === this.center;
+            const fixedB = b.id === this.center;
+            if (!fixedA) a.y += up ? -push : push;
+            if (!fixedB) b.y += up ? push : -push;
+            if (fixedA || fixedB) { (fixedA ? b : a).y += (up ? 1 : -1) * (fixedA ? push : -push); }
+            moved = true;
+          }
+        }
+      }
+      if (!moved) break;
+    }
+  }
+
   // Layered: what the centre uses to the right, what uses the centre to the left, one column per layer.
   layoutTree() {
     const forward = new Set([this.center]);
@@ -265,11 +368,26 @@ class GraphView {
       if (!columns.has(n.column)) columns.set(n.column, []);
       columns.get(n.column).push(n);
     }
+    const keys = [...columns.keys()].sort((a, b) => a - b);
+    const widest = column => Math.max(...columns.get(column).map(n => n.w));
+    const xOf = new Map([[0, 0]]);
+    const gap = 70;
+    for (const key of keys.filter(k => k > 0)) {
+      const previous = key - 1;
+      const from = xOf.has(previous) ? xOf.get(previous) : 0;
+      // Labels hang to the right on this side; the centre's own label sits above its node.
+      const span = previous === 0 ? 40 : columns.has(previous) ? widest(previous) : 40;
+      xOf.set(key, from + span + gap);
+    }
+    for (const key of keys.filter(k => k < 0).sort((a, b) => b - a)) {
+      const from = xOf.has(key + 1) ? xOf.get(key + 1) : 0;
+      xOf.set(key, from - widest(key) - gap - (key + 1 === 0 ? 0 : 0));
+    }
     for (const [column, members] of columns) {
-      members.sort((a, b) => Number(b.entry) - Number(a.entry) || String(a.display).localeCompare(String(b.display)));
+      members.sort((a, b) => Number(b.entry) - Number(a.entry) || String(a.text).localeCompare(String(b.text)));
       members.forEach((n, i) => {
-        n.x = column * 320;
-        n.y = (i - (members.length - 1) / 2) * 30;
+        n.x = xOf.get(column);
+        n.y = (i - (members.length - 1) / 2) * 34;
       });
     }
   }
@@ -278,37 +396,73 @@ class GraphView {
     const edgeLayer = svg('g');
     const labelLayer = svg('g');
     const nodeLayer = svg('g');
-    const showLabels = this.edges.length <= 90;
-    const tree = this.nodes.some(n => n.side !== undefined);
+    const showLabels = this.edges.length <= (this.tree ? 60 : 40);
+    const placed = [];
     for (const e of this.edges) {
       const a = this.byId.get(e.from);
       const b = this.byId.get(e.to);
-      const path = tree
-        ? `M ${a.x} ${a.y} C ${(a.x + b.x) / 2} ${a.y}, ${(a.x + b.x) / 2} ${b.y}, ${b.x} ${b.y}`
+      const mid = (a.x + b.x) / 2;
+      const path = this.tree
+        ? `M ${a.x} ${a.y} C ${mid} ${a.y}, ${mid} ${b.y}, ${b.x} ${b.y}`
         : `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
       const line = svg('path', { d: path, class: `edge ${e.kind}`, 'marker-end': `url(#arrow-${this.options.name})` });
       e.element = line;
       edgeLayer.append(line);
       if (showLabels) {
-        const label = svg('text', { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 4, 'text-anchor': 'middle', class: 'edge-label' });
-        label.textContent = `${e.kind}${e.count > 1 ? ' ×' + e.count : ''}`;
-        labelLayer.append(label);
+        // Near the far end, where neighbouring edges have already spread apart.
+        const t = this.tree ? 0.72 : 0.5;
+        const u = 1 - t;
+        const x = this.tree ? u * u * u * a.x + 3 * u * u * t * mid + 3 * u * t * t * mid + t * t * t * b.x : a.x + (b.x - a.x) * t;
+        const y = this.tree ? u * u * u * a.y + 3 * u * u * t * a.y + 3 * u * t * t * b.y + t * t * t * b.y : a.y + (b.y - a.y) * t;
+        const caption = `${e.kind}${e.count > 1 ? ' ×' + e.count : ''}`;
+        const half = caption.length * 3.4 + 4;
+        // An edge label that would sit on a node's name is left out; the edge colour and the details panel still say it.
+        const covers = this.nodes.some(n => {
+          const left = n.side === -1 ? n.x - n.w : this.tree && n.id === this.center ? n.x - n.w / 2 : n.x - n.radius - 4;
+          const right = n.side === -1 ? n.x + n.radius + 4 : this.tree && n.id === this.center ? n.x + n.w / 2 : n.x + n.w;
+          const top = this.tree && n.id === this.center ? n.y - n.radius - 26 : n.y - 11;
+          const bottom = this.tree && n.id === this.center ? n.y - n.radius - 4 : n.y + 11;
+          return x + half > left && x - half < right && y - 4 > top - 6 && y - 14 < bottom;
+        });
+        const crowded = placed.some(p => Math.abs(p.x - x) < p.half + half && Math.abs(p.y - y) < 12);
+        if (!covers && !crowded) {
+          placed.push({ x, y, half });
+          const label = svg('text', { x, y: y - 4, 'text-anchor': 'middle', class: 'edge-label' });
+          label.textContent = caption;
+          labelLayer.append(label);
+        }
       }
     }
     for (const n of this.nodes) {
       const project = n.kind === 'project' || n.kind === 'test project';
-      const classes = ['node', n.kind === 'type' ? 'type' : '', n.external ? 'external' : '', n.test ? 'test' : '', n.entry ? 'entry' : '', n.id === this.center ? 'center' : '', project ? 'project' : ''];
+      const classes = ['node', n.kind === 'cluster' ? 'cluster' : '', n.kind === 'type' ? 'type' : '', n.external ? 'external' : '', n.test ? 'test' : '', n.entry ? 'entry' : '', n.id === this.center ? 'center' : '', project ? 'project' : ''];
       const group = svg('g', { class: classes.filter(Boolean).join(' '), transform: `translate(${n.x},${n.y})`, tabindex: 0, role: 'button', 'aria-label': n.display });
-      const radius = n.id === this.center ? 9 : n.entry || n.kind === 'type' || project ? 7 : 5;
+      const radius = n.radius;
       group.append(svg('circle', { r: radius }));
       const left = n.side === -1;
-      const text = svg('text', { x: left ? -radius - 6 : radius + 6, y: 4, 'text-anchor': left ? 'end' : 'start' });
-      text.textContent = n.label || n.display;
+      const above = this.tree && n.id === this.center;
+      const text = above
+        ? svg('text', { x: 0, y: -radius - 10, 'text-anchor': 'middle' })
+        : svg('text', { x: left ? -radius - 6 : radius + 6, y: 4, 'text-anchor': left ? 'end' : 'start' });
+      text.textContent = n.text;
       group.append(text);
       const title = svg('title');
-      title.textContent = `${n.display}\n${n.kind}${n.file ? `\n${n.file}:${n.line}` : ''}${n.entryLabel ? `\n${n.entryKind}: ${n.entryLabel}` : ''}`;
+      title.textContent = n.kind === 'cluster'
+        ? `${n.members.length} members of ${n.display} (click to open):\n${n.members.slice(0, 15).join('\n')}${n.members.length > 15 ? '\n…' : ''}`
+        : `${n.display}\n${n.kind}${n.file ? `\n${n.file}:${n.line}` : ''}${n.entryLabel ? `\n${n.entryKind}: ${n.entryLabel}` : ''}`;
       group.append(title);
-      group.addEventListener('click', event => { event.stopPropagation(); this.select(n.id); });
+      group.addEventListener('click', event => {
+        event.stopPropagation();
+        if (n.kind === 'cluster') {
+          this.expanded.add(n.id);
+          const selected = this.selected;
+          this.set(this.raw, this.layout);
+          if (selected && this.byId.has(selected)) this.select(selected);
+          this.options.onExpand?.(this.nodes.length, this.edges.length);
+          return;
+        }
+        this.select(n.id);
+      });
       group.addEventListener('dblclick', event => { event.stopPropagation(); this.options.onOpen?.(n.id); });
       group.addEventListener('keydown', event => {
         if (event.key === 'Enter') this.options.onOpen?.(n.id);
@@ -337,11 +491,12 @@ class GraphView {
     const width = rect.width || 800;
     const height = rect.height || 600;
     // Labels hang off the side of each node, so measure them into the box.
-    const labelWidth = n => String(n.label || n.display).length * 7.4 + 20;
+    const labelWidth = n => n.w || 120;
     const ys = this.nodes.map(n => n.y);
-    const minX = Math.min(...this.nodes.map(n => n.x - (n.side === -1 ? labelWidth(n) : 20)));
-    const maxX = Math.max(...this.nodes.map(n => n.x + (n.side === -1 ? 20 : labelWidth(n))));
-    const minY = Math.min(...ys) - 40;
+    const centred = n => this.tree && n.id === this.center;
+    const minX = Math.min(...this.nodes.map(n => n.x - (centred(n) ? labelWidth(n) / 2 : n.side === -1 ? labelWidth(n) : 20)));
+    const maxX = Math.max(...this.nodes.map(n => n.x + (centred(n) ? labelWidth(n) / 2 : n.side === -1 ? 20 : labelWidth(n))));
+    const minY = Math.min(...ys) - 50;
     const maxY = Math.max(...ys) + 40;
     this.scale = Math.min(1.4, Math.max(0.15, Math.min(width / (maxX - minX), height / (maxY - minY))));
     this.tx = (width - (maxX - minX) * this.scale) / 2 - minX * this.scale;
@@ -400,7 +555,10 @@ const graphState = { center: null, dir: 'out', depth: 1, layout: 'force', kinds:
 let mainGraph = null;
 
 function setupGraphTab() {
-  mainGraph = new GraphView($('g-canvas'), { name: 'main', onSelect: showDetails, onOpen: id => openGraph(id) });
+  mainGraph = new GraphView($('g-canvas'), {
+    name: 'main', onSelect: showDetails, onOpen: id => openGraph(id),
+    onExpand: (nodes, edges) => { $('g-count').textContent = `${nodes} shown · ${edges} edges`; },
+  });
   mainGraph.empty('Search for a method, type or property above, or open one from Explore, Routes or Overview.');
   attachSearch($('g-search'), $('g-suggest'), symbol => openGraph(symbol.id));
   $('g-kinds-body').replaceChildren(...EDGE_KINDS.map(kind => el('label', { class: 'check' },
@@ -474,7 +632,10 @@ async function loadGraph() {
     mainGraph.lastData = data;
     mainGraph.set(data, graphState.layout);
     mainGraph.select(data.center);
-    $('g-count').textContent = `${data.nodes.length} nodes · ${data.edges.length} edges${data.truncated ? ' · capped' : ''}`;
+    // The details panel opens beside the canvas and narrows it; fit again once it has.
+    requestAnimationFrame(() => mainGraph.fit());
+    const grouped = mainGraph.nodes.filter(n => n.kind === 'cluster').length;
+    $('g-count').textContent = `${data.nodes.length} nodes${grouped ? ` in ${mainGraph.nodes.length} shown (${grouped} groups)` : ''} · ${data.edges.length} edges${data.truncated ? ' · capped at 400' : ''}`;
   } catch (error) {
     $('g-count').textContent = '';
     mainGraph.empty(error.message);
@@ -659,7 +820,9 @@ async function openFile(path, line, symbolId) {
       el('span', {}, el('b', { text: String(impact.testSites) }), ' test call sites'),
       file.errors ? el('span', { class: 'pill bad', text: `${file.errors} binding errors` }) : null].filter(Boolean));
     drawCode(file);
-    const target = symbolId ? file.symbols.find(s => s.id === symbolId) : file.symbols.find(s => s.kind === 'type') || file.symbols[0];
+    const target = symbolId ? file.symbols.find(s => s.id === symbolId)
+      : line ? innermost(line) || file.symbols[0]
+      : file.symbols.find(s => s.kind === 'type') || file.symbols[0];
     if (target) selectDeclaration(target);
     if (line) focusLine(line);
   } catch (error) {
@@ -939,6 +1102,9 @@ call('status', {}).then(result => { if (result.data) $('solution').textContent =
 const link = new URLSearchParams(location.hash.slice(1));
 const tabs = ['overview', 'explore', 'graph', 'routes', 'di', 'architecture'];
 const firstTab = tabs.find(t => location.hash === `#${t}`) || (tabs.includes(link.get('tab')) ? link.get('tab') : 'overview');
+if (['out', 'in', 'both'].includes(link.get('dir'))) { graphState.dir = link.get('dir'); $('g-dir').value = graphState.dir; }
+if (Number(link.get('depth')) >= 1) graphState.depth = Math.min(4, Number(link.get('depth')));
+if (link.get('layout') === 'tree') setLayout('tree');
 if (link.get('id')) openGraph(link.get('id'));
 else if (link.get('file')) openFile(link.get('file'), Number(link.get('line')) || null);
 else switchTab(firstTab);

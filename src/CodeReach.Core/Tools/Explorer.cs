@@ -104,14 +104,14 @@ public static class Explorer
     {
         var nodes = new Dictionary<string, int>(StringComparer.Ordinal) { [id] = 0 };
         var edges = new Dictionary<(string From, string To, string Kind), int>();
-        var frontier = new List<string> { id };
+        // Each node keeps walking the way it was reached: callers further up, callees further down. "Both"
+        // means both ways from the centre only, so a callee's other callers never flood in.
+        var frontier = new List<(string Id, bool Out, bool In)> { (id, direction is "out" or "both", direction is "in" or "both") };
         var truncated = false;
-        var outgoing = direction is "out" or "both";
-        var incoming = direction is "in" or "both";
         for (var layer = 1; layer <= depth && frontier.Count > 0 && !truncated; layer++)
         {
-            var next = new List<string>();
-            foreach (var current in frontier)
+            var next = new List<(string Id, bool Out, bool In)>();
+            foreach (var (current, outgoing, incoming) in frontier)
             {
                 foreach (var (from, to, kind) in Relations(graph, current, outgoing, incoming, includeTests))
                 {
@@ -135,7 +135,7 @@ public static class Explorer
                         }
 
                         nodes[other] = layer;
-                        next.Add(other);
+                        next.Add((other, from == current, from != current));
                     }
 
                     edges[(from, to, kind)] = edges.GetValueOrDefault((from, to, kind)) + 1;
@@ -199,7 +199,8 @@ public static class Explorer
         item["callSites"] = callers.Count(e => !e.Row.IsTest);
         item["testCallSites"] = callers.Count(e => e.Row.IsTest);
         item["callers"] = callers.Where(e => !e.Row.IsTest).Select(e => e.Row.Fact.From).Distinct(StringComparer.Ordinal).Count();
-        item["callees"] = graph.Callees(id).Select(e => e.Target).Distinct(StringComparer.Ordinal).Count();
+        item["callees"] = graph.Callees(id).Where(e => !graph.Node(e.Target).IsExternal && graph.Node(e.Target).Fact.Kind is SymKind.Method or SymKind.Constructor or SymKind.Handler)
+            .Select(e => e.Target).Distinct(StringComparer.Ordinal).Count();
         item["usages"] = graph.RowsTo(id).Count(r => !r.IsTest);
         item["entryPoints"] = Data.Rows(graph.EntryPoints.GetValueOrDefault(id) ?? [], e => new JsonObject { ["kind"] = e.Kind, ["label"] = e.Label });
         item["endpoints"] = Data.Rows(graph.Endpoints.Where(e => e.Handler == id), e => Data.Endpoint(graph, e));
