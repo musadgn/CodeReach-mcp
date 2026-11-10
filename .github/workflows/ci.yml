@@ -1,0 +1,101 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-test:
+    name: build and test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # MSBuild locates the SDK and normalises paths differently per OS, and CodeReach loads
+        # solutions through MSBuild, so every OS runs the full suite.
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore CodeReach.slnx
+
+      - name: Build (warnings are errors)
+        run: dotnet build CodeReach.slnx -c Release --no-restore
+
+      # The fixture restores samples/SampleShop itself before indexing it.
+      - name: Test
+        run: dotnet test --project tests/CodeReach.Tests -c Release --no-build
+
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Check formatting
+        run: dotnet format CodeReach.slnx --verify-no-changes
+
+  pack-smoke:
+    name: package smoke test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Pack
+        run: dotnet pack src/CodeReach.Mcp -c Release -o "$RUNNER_TEMP/feed"
+
+      - name: Install the tool from the local package
+        run: |
+          version="$(dotnet msbuild src/CodeReach.Mcp -getProperty:Version)"
+          dotnet tool install CodeReach.Mcp --version "$version" \
+            --add-source "$RUNNER_TEMP/feed" --tool-path "$RUNNER_TEMP/tools"
+
+      - name: MCP initialize and tools/list
+        run: |
+          set -euo pipefail
+          {
+            printf '%s\n' \
+              '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci-smoke","version":"0"}}}' \
+              '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+              '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+            sleep 5
+          } | "$RUNNER_TEMP/tools/codereach" --solution samples/SampleShop --cache-dir "$RUNNER_TEMP/cache" \
+            > "$RUNNER_TEMP/smoke.out" 2> "$RUNNER_TEMP/smoke.err" || true
+
+          grep -q '"id":1,' "$RUNNER_TEMP/smoke.out" || { echo "no initialize response"; cat "$RUNNER_TEMP/smoke.err"; exit 1; }
+          grep -q '"id":2,' "$RUNNER_TEMP/smoke.out" || { echo "no tools/list response"; cat "$RUNNER_TEMP/smoke.err"; exit 1; }
+          for tool in status reindex find_symbol callers callees find_usages trace_to_entrypoints routes entrypoints impact architecture; do
+            grep -q "\"name\":\"$tool\"" "$RUNNER_TEMP/smoke.out" || { echo "tools/list is missing $tool"; exit 1; }
+          done
+          echo "package starts and lists all tools"

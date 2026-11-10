@@ -1,0 +1,131 @@
+name: release
+
+# Runs only for a pushed version tag (v0.1.0). The publish job waits for approval on the
+# "release" environment, because a NuGet version can be unlisted but never deleted.
+#
+# One-time setup, outside this file:
+#   - GitHub: create environment "release" with the owner as required reviewer.
+#   - GitHub: add secret NUGET_USER (nuget.org profile name, not an email address).
+#   - nuget.org: add a trusted publishing policy for owner musadgn, repository CodeReach-mcp,
+#     workflow file release.yml, environment release.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Check that tag, package and server.json agree
+        id: version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          props="$(dotnet msbuild src/CodeReach.Mcp -getProperty:Version)"
+          server="$(jq -r '.version' src/CodeReach.Mcp/.mcp/server.json)"
+          package="$(jq -r '.packages[0].version' src/CodeReach.Mcp/.mcp/server.json)"
+          echo "tag=$tag props=$props server.json=$server server.json package=$package"
+          [ "$tag" = "$props" ] && [ "$tag" = "$server" ] && [ "$tag" = "$package" ] \
+            || { echo "::error::version mismatch"; exit 1; }
+          grep -q "mcp-name: $(jq -r '.name' src/CodeReach.Mcp/.mcp/server.json)" README.md \
+            || { echo "::error::README.md lacks the mcp-name line the MCP Registry verifies"; exit 1; }
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+
+      - run: dotnet restore CodeReach.slnx
+      - run: dotnet build CodeReach.slnx -c Release --no-restore
+      - run: dotnet test --project tests/CodeReach.Tests -c Release --no-build
+      - run: dotnet pack src/CodeReach.Mcp -c Release --no-build -o artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: artifacts/*.nupkg
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write # GitHub release
+      id-token: write # NuGet trusted publishing and MCP Registry login
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      MCP_PUBLISHER_VERSION: v1.8.1
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: package
+          path: artifacts
+
+      - name: NuGet login (OIDC to short-lived API key)
+        uses: NuGet/login@v1
+        id: nuget
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push to NuGet
+        run: >
+          dotnet nuget push "artifacts/CodeReach.Mcp.${VERSION}.nupkg"
+          --api-key "${{ steps.nuget.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg --title "$GITHUB_REF_NAME" --generate-notes
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Download and verify mcp-publisher
+        run: |
+          set -euo pipefail
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+          rm -f "$archive" "$archive.sigstore.json"
+
+      - name: Log in to the MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      # The registry checks the package on nuget.org, which takes minutes to index a new version.
+      - name: Publish server.json to the MCP Registry
+        working-directory: src/CodeReach.Mcp/.mcp
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if "$GITHUB_WORKSPACE/mcp-publisher" publish; then exit 0; fi
+            echo "attempt $attempt failed; waiting for nuget.org to index ${VERSION}"
+            sleep 60
+          done
+          exit 1

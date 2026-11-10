@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directories:
+      - "/"
+      - "/samples/SampleShop"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # The Roslyn packages must move together; one PR per package would not build.
+      roslyn:
+        patterns: ["Microsoft.CodeAnalysis*"]
+      microsoft-extensions:
+        patterns: ["Microsoft.Extensions.*"]
+      xunit:
+        patterns: ["xunit*"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
