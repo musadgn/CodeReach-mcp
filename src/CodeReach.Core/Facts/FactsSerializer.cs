@@ -9,7 +9,7 @@ namespace CodeReach.Core.Facts;
 public static class FactsSerializer
 {
     /// <summary>Bumped on any change to the facts model or this layout. Older files are discarded, never migrated.</summary>
-    public const int FormatVersion = 1;
+    public const int FormatVersion = 2;
 
     private const uint Magic = 0x43524658; // "CRFX"
 
@@ -103,6 +103,23 @@ public static class FactsSerializer
                 Text(e.Kind);
                 Text(e.Label);
             });
+            List(d.Services, v =>
+            {
+                Text(v.Service);
+                Optional(v.Implementation);
+                Text(v.Lifetime);
+                Text(v.Method);
+                writer.Write(v.Line);
+                Text(v.From);
+                Text(v.Detail);
+            });
+            List(d.Dependencies, v =>
+            {
+                Text(v.Constructor);
+                writer.Write(v.Ordinal);
+                Text(v.Type);
+                writer.Write(v.Many);
+            });
         });
         List(facts.LoadWarnings, Text);
 
@@ -181,7 +198,9 @@ public static class FactsSerializer
             List(() => new OverrideFact(Text(), Text())),
             List(() => new EndpointFact(Text(), Text(), Text(), reader.ReadBoolean(), reader.ReadInt32(), List(Auth), Prefix())),
             List(() => new GroupArgFact(Text(), reader.ReadInt32(), Text(), List(Auth), Prefix())),
-            List(() => new EntryPointFact(Text(), Text(), Text()))));
+            List(() => new EntryPointFact(Text(), Text(), Text())),
+            List(() => new ServiceFact(Text(), Optional(), Text(), Text(), reader.ReadInt32(), Text(), Text())),
+            List(() => new DependencyFact(Text(), reader.ReadInt32(), Text(), reader.ReadBoolean()))));
         return new IndexFacts(solution, root, projects, documents, List(Text));
 
         string Text()

@@ -23,6 +23,8 @@ public sealed partial class CodeGraph
     private readonly Dictionary<string, List<EntryPoint>> _entryPoints = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ProjectFact> _projects = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<SymbolNode>> _symbolsByFile = new(StringComparer.Ordinal);
+    private readonly List<Registration> _registrations = [];
+    private readonly List<Dependency> _dependencies = [];
     private volatile Dictionary<string, List<SymbolNode>>? _byName;
 
     public CodeGraph(IndexFacts facts, long generation, DateTimeOffset builtAt)
@@ -82,6 +84,12 @@ public sealed partial class CodeGraph
     public IReadOnlyCollection<SymbolNode> Nodes => _nodes.Values;
 
     public IReadOnlyDictionary<string, List<EntryPoint>> EntryPoints => _entryPoints;
+
+    /// <summary>Dependency injection registrations, in file and line order.</summary>
+    public IReadOnlyList<Registration> Registrations => _registrations;
+
+    /// <summary>Constructor parameters of source types: what each type asks the container for.</summary>
+    public IReadOnlyList<Dependency> Dependencies => _dependencies;
 
     public SymbolNode Node(string id) => _nodes.TryGetValue(id, out var node) ? node : External(id);
 
@@ -192,6 +200,8 @@ public sealed partial class CodeGraph
             }
         }
 
+        _registrations.AddRange(doc.Services.Select(fact => new Registration(fact, doc.Path, doc.Project, isTest)));
+        _dependencies.AddRange(doc.Dependencies.Select(fact => new Dependency(fact, doc.Path, doc.Project, isTest)));
         foreach (var item in doc.Overrides)
         {
             if (_overrideUp.TryAdd(item.Member, item.Overridden))

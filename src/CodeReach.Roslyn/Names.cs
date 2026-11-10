@@ -21,6 +21,7 @@ internal static class Names
     public const string AuthorizationFilter = "Microsoft.AspNetCore.Mvc.Filters.IAuthorizationFilter";
     public const string AsyncAuthorizationFilter = "Microsoft.AspNetCore.Mvc.Filters.IAsyncAuthorizationFilter";
     public const string RequirementData = "Microsoft.AspNetCore.Authorization.IAuthorizationRequirementData";
+    public const string ServiceCollection = "Microsoft.Extensions.DependencyInjection.IServiceCollection";
     public const string HostedService = "Microsoft.Extensions.Hosting.IHostedService";
     public const string BackgroundService = "Microsoft.Extensions.Hosting.BackgroundService";
     public const string EndpointRouteBuilder = "Microsoft.AspNetCore.Routing.IEndpointRouteBuilder";

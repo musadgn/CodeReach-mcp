@@ -24,55 +24,22 @@ internal sealed partial class FactWalker
 
     private sealed record Builder(string Prefix, List<AuthFact> Auth, PrefixParam? Via);
 
-    private static ExpressionSyntax? Unwrap(ExpressionSyntax? expression)
-    {
-        while (true)
-        {
-            switch (expression)
-            {
-                case ParenthesizedExpressionSyntax parenthesized: expression = parenthesized.Expression; break;
-                case CastExpressionSyntax cast: expression = cast.Expression; break;
-                case PostfixUnaryExpressionSyntax suppress when suppress.OperatorToken.ValueText == "!": expression = suppress.Operand; break;
-                default: return expression;
-            }
-        }
-    }
+    private static ExpressionSyntax? Unwrap(ExpressionSyntax? expression) => Arguments.Unwrap(expression);
 
-    /// <summary>The expression passed for a parameter of the definition, with the receiver of a reduced extension call as ordinal 0.</summary>
-    private static ExpressionSyntax? Argument(InvocationExpressionSyntax invocation, IMethodSymbol bound, int ordinal)
-    {
-        var reduced = bound.ReducedFrom is not null;
-        if (reduced && ordinal == 0)
-        {
-            return (invocation.Expression as MemberAccessExpressionSyntax)?.Expression;
-        }
+    private static ExpressionSyntax? Argument(InvocationExpressionSyntax invocation, IMethodSymbol bound, int ordinal) =>
+        Arguments.Of(invocation, bound, ordinal);
 
-        var definition = bound.ReducedFrom ?? bound;
-        if (ordinal >= definition.Parameters.Length)
-        {
-            return null;
-        }
-
-        var arguments = invocation.ArgumentList.Arguments;
-        var named = arguments.FirstOrDefault(a => a.NameColon?.Name.Identifier.ValueText == definition.Parameters[ordinal].Name);
-        if (named is not null)
-        {
-            return named.Expression;
-        }
-
-        var index = ordinal - (reduced ? 1 : 0);
-        return index >= 0 && index < arguments.Count && arguments[index].NameColon is null ? arguments[index].Expression : null;
-    }
-
-    private static ExpressionSyntax? Argument(InvocationExpressionSyntax invocation, IMethodSymbol bound, string parameter)
-    {
-        var found = (bound.ReducedFrom ?? bound).Parameters.FirstOrDefault(p => p.Name == parameter);
-        return found is null ? null : Argument(invocation, bound, found.Ordinal);
-    }
+    private static ExpressionSyntax? Argument(InvocationExpressionSyntax invocation, IMethodSymbol bound, string parameter) =>
+        Arguments.Of(invocation, bound, parameter);
 
     private void InspectInvocation(InvocationExpressionSyntax invocation, IMethodSymbol bound)
     {
         var definition = (bound.ReducedFrom ?? bound).OriginalDefinition;
+        if (ReadRegistration(invocation, bound))
+        {
+            return;
+        }
+
         if (Names.Is(definition.ContainingType, Names.MapExtensions) && MapVerbs.TryGetValue(definition.Name, out var verb))
         {
             ReadEndpoint(invocation, bound, verb);

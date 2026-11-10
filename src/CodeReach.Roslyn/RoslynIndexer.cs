@@ -17,7 +17,7 @@ public sealed record SourceChanges(IReadOnlyList<string> Changed, IReadOnlyList<
 public sealed class RoslynIndexer : IDisposable
 {
     /// <summary>Bumped whenever extraction would produce different facts for the same source.</summary>
-    public const int ExtractorVersion = 1;
+    public const int ExtractorVersion = 2;
 
     private static readonly string[] TestFrameworkAssemblies =
     [
@@ -229,7 +229,8 @@ public sealed class RoslynIndexer : IDisposable
         var errors = model.GetDiagnostics(cancellationToken: cancel).Count(d => d.Severity == DiagnosticSeverity.Error);
         return new DocumentFacts(
             path, project, ShapeHasher.Hash(root), errors, [.. walker.Symbols], [.. walker.References], [.. walker.Types],
-            [.. walker.Overrides], [.. walker.Endpoints], [.. walker.GroupArgs], [.. walker.EntryPoints]);
+            [.. walker.Overrides], [.. walker.Endpoints], [.. walker.GroupArgs], [.. walker.EntryPoints],
+            [.. walker.Services], [.. walker.Dependencies]);
     }
 
     /// <summary>C# projects, one per project file: a multi-targeted project is indexed for its first target only.</summary>

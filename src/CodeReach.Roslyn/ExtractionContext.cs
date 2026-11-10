@@ -18,7 +18,10 @@ internal sealed class ExtractionContext
         Ids = ids;
         Root = root;
         EntryPoint = compilation.GetEntryPoint(CancellationToken.None);
+        Templates = new RegistrationTemplates(compilation);
     }
+
+    public RegistrationTemplates Templates { get; }
 
     public Compilation Compilation { get; }
 

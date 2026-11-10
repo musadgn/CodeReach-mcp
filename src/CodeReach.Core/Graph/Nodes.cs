@@ -63,3 +63,20 @@ public sealed record Completion(IReadOnlyList<string> Problems)
 {
     public bool IsComplete => Problems.Count == 0;
 }
+
+public sealed record Registration(ServiceFact Fact, string File, string Project, bool IsTest)
+{
+    public string Location => $"{File}:{Fact.Line}";
+
+    /// <summary>A TryAdd call registers nothing when the service already has a registration.</summary>
+    public bool IsConditional => Fact.Method.StartsWith("Try", StringComparison.Ordinal);
+
+    /// <summary>A keyed service is resolved only by its key, so it neither satisfies nor overrides a plain injection.</summary>
+    public bool IsKeyed => Fact.Method.Contains("Keyed", StringComparison.Ordinal);
+}
+
+public sealed record Dependency(DependencyFact Fact, string File, string Project, bool IsTest)
+{
+    /// <summary>The type whose constructor asks for <see cref="DependencyFact.Type"/>.</summary>
+    public string Consumer => Ids.ContainingTypeOf(Fact.Constructor) ?? Fact.Constructor;
+}

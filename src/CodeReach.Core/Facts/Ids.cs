@@ -88,6 +88,48 @@ public static class Ids
         return kind == SymKind.Constructor ? "new " + parts[^2] : parts[^2] + "." + parts[^1];
     }
 
+    private static readonly Dictionary<string, string> Keywords = new(StringComparer.Ordinal)
+    {
+        ["T:System.String"] = "string",
+        ["T:System.Int32"] = "int",
+        ["T:System.Int64"] = "long",
+        ["T:System.Boolean"] = "bool",
+        ["T:System.Object"] = "object",
+        ["T:System.Guid"] = "Guid",
+        ["T:System.Decimal"] = "decimal",
+        ["T:System.Double"] = "double",
+        ["T:System.Byte"] = "byte",
+    };
+
+    /// <summary>A readable form of a type key: <c>T:Ns.IRepo`1&lt;T:Ns.Order&gt;</c> gives <c>IRepo&lt;Order&gt;</c>.</summary>
+    public static string DisplayOfKey(string typeKey)
+    {
+        var open = typeKey.IndexOf('<', StringComparison.Ordinal);
+        var name = DisplayOf(DefOf(typeKey));
+        var close = typeKey.LastIndexOf('>');
+        if (open < 0 || close < open)
+        {
+            return name;
+        }
+
+        var arguments = new List<string>();
+        var depth = 0;
+        var start = open + 1;
+        for (var i = start; i < close; i++)
+        {
+            depth += typeKey[i] switch { '<' => 1, '>' => -1, _ => 0 };
+            if (typeKey[i] == ',' && depth == 0)
+            {
+                arguments.Add(typeKey[start..i]);
+                start = i + 1;
+            }
+        }
+
+        arguments.Add(typeKey[start..close]);
+        var shown = arguments.Select(a => a.Length > 0 && a[0] is '!' or '?' ? a[1..] : Keywords.GetValueOrDefault(a) ?? DisplayOfKey(a));
+        return $"{name}<{string.Join(", ", shown)}>";
+    }
+
     /// <summary>The assembly a source symbol id carries (<c>M:[Asm]Ns.T.M</c>), or null for metadata symbols.</summary>
     public static string? AssemblyOf(string id)
     {

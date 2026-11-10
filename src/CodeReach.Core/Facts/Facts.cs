@@ -51,6 +51,20 @@ public sealed record GroupArgFact(string Callee, int Ordinal, string Prefix, Aut
 
 public sealed record EntryPointFact(string Symbol, string Kind, string Label);
 
+/// <summary>
+/// One dependency injection registration call. <see cref="Service"/> and <see cref="Implementation"/> are
+/// type definition ids; <see cref="Implementation"/> is null when a factory's result type is unknown.
+/// <see cref="From"/> is the symbol whose code makes the call.
+/// </summary>
+public sealed record ServiceFact(
+    string Service, string? Implementation, string Lifetime, string Method, int Line, string From, string Detail);
+
+/// <summary>
+/// A constructor parameter: what the type asks the container for. <see cref="Type"/> is a type definition id;
+/// <see cref="Many"/> marks <c>IEnumerable&lt;T&gt;</c>, where <see cref="Type"/> is the element type.
+/// </summary>
+public sealed record DependencyFact(string Constructor, int Ordinal, string Type, bool Many);
+
 public sealed record DocumentFacts(
     string Path,
     string Project,
@@ -62,7 +76,9 @@ public sealed record DocumentFacts(
     OverrideFact[] Overrides,
     EndpointFact[] Endpoints,
     GroupArgFact[] GroupArgs,
-    EntryPointFact[] EntryPoints);
+    EntryPointFact[] EntryPoints,
+    ServiceFact[] Services,
+    DependencyFact[] Dependencies);
 
 public sealed record ProjectFact(
     string Name, string Path, bool IsTest, string TestEvidence, string[] References, int Documents, int Skipped, string? LoadFailure);

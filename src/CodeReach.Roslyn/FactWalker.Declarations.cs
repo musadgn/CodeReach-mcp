@@ -62,6 +62,11 @@ internal sealed partial class FactWalker
             id, KindOf(symbol), name, qname, symbol.ToDisplayString(SymbolIds.Short),
             Ids.IdOf(symbol.ContainingType),
             LineOf(NameToken(nameNode ?? span)), lines.StartLinePosition.Line + 1, lines.EndLinePosition.Line + 1, FlagsOf(symbol)));
+        if (symbol is IMethodSymbol { MethodKind: MethodKind.Constructor, IsStatic: false } instanceConstructor)
+        {
+            RecordDependencies(instanceConstructor, id);
+        }
+
         return id;
     }
 

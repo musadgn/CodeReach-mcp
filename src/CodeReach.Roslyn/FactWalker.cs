@@ -42,6 +42,10 @@ internal sealed partial class FactWalker : CSharpSyntaxWalker
 
     public List<EntryPointFact> EntryPoints { get; } = [];
 
+    public List<ServiceFact> Services { get; } = [];
+
+    public List<DependencyFact> Dependencies { get; } = [];
+
     private SymbolIds Ids => _context.Ids;
 
     public override void Visit(SyntaxNode? node)
