@@ -31,8 +31,8 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -56,7 +56,7 @@ jobs:
       - run: dotnet test --project tests/CodeReach.Tests -c Release --no-build
       - run: dotnet pack src/CodeReach.Mcp -c Release --no-build -o artifacts
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: package
           path: artifacts/*.nupkg
@@ -74,9 +74,9 @@ jobs:
       VERSION: ${{ needs.build.outputs.version }}
       MCP_PUBLISHER_VERSION: v1.8.1
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: package
           path: artifacts
@@ -99,7 +99,7 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg --title "$GITHUB_REF_NAME" --generate-notes
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
 
       - name: Download and verify mcp-publisher
         run: |
