@@ -155,8 +155,14 @@ as **unrooted**, so reach lost to reflection or dependency injection is shown ra
 
 ## 6 Tool surface
 
-Thirteen coarse tools and five prompts, each one record in a registry. Both doors loop over the registries,
-so MCP and CLI cannot drift.
+Thirteen coarse tools and five prompts, each one record in a registry. Every door loops over the registries,
+so MCP, the CLI and the UI cannot drift. Tools that a screen needs also return structured data, built from
+the same objects as their text.
+
+**UI door.** `codereach ui` serves three embedded files and one `POST /api/call` on 127.0.0.1 with a random
+port. Every API call needs a one-time token, which reaches the page in the URL fragment (never sent to a
+server or a referrer). Requests for another host (DNS rebinding) or from another origin are refused, and the
+page runs under a CSP that allows only its own script. The page sets all text through `textContent`.
 
 | Tool | Answers |
 |---|---|

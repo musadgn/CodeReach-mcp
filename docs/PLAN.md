@@ -144,6 +144,7 @@ STATUS 2026-11-10 (what verified each phase; the suite is `dotnet test --project
 | 5 | shipped | `IncrementalTests`: after a body edit, a new member, a constant change, a file added and a file removed, the incremental facts hash equals a from-scratch index; a fresh snapshot is served with no workspace loaded. The file watcher and the idle release are unverified by a test |
 | 6 | shipped | Packed to a local feed, installed with `dotnet tool install --tool-path` into a temp directory, CLI call and a raw JSON-RPC handshake (initialize, tools/list, tools/call) run against the sample. `dnx CodeReach.Mcp --yes -- version` run against nuget.org after release |
 | 7 | shipped 0.1.0 | NuGet `CodeReach.Mcp` 0.1.0 (trusted publishing), GitHub release `v0.1.0`, MCP Registry `io.github.musadgn/codereach-mcp` 0.1.0. The registry step failed in CI (description over 100 characters, NuGet base URL must be the v3 index); both fixed and published by hand, and the release workflow now checks the length |
+| 10 | built, unreleased | `UiServerTests` over real HTTP: strict CSP on the page; refused without the token, with a wrong token, from another origin and for another host (HttpListener's own prefix match refuses a rebound host with 404 before the server's 421 check); routes and trace data equal their text answers. Screens checked by headless Chrome screenshots of the sample (health report, trace, routes, DI, architecture) and of the large solution (every call under 0.5 s; 619 routes in 12 ms). Unverified: phone-width layout (headless Chrome will not render narrower than about 500 px), and binding 127.0.0.1 as a non-administrator on Windows (CI runners are administrators). Design: blueprint, command bar first, chosen by the owner |
 | 9 | built, unreleased | `ContainerTests` (audited list of 16 registrations, text oracle, generic helper, constructor dependencies, captive and unregistered findings, a type/member name clash), `PromptTests`, `WireTests` (prompts over stdio). Suite: 58 tests. Large solution: 379 registrations, equal to the independent count (347 calls in the text, minus one helper line, plus its 33 call sites); 0 captive dependencies and 0 unregistered services, spot-checked on a job that uses `IServiceScopeFactory` |
 
 **CI** (approved 2026-11-10): `ci.yml` builds with warnings as errors, tests on three operating systems,
@@ -186,7 +187,7 @@ navigation (text search, file outline, reading a file) is deliberately not built
   prompts so every client gets them without installing anything.
 - Instructions: a task-to-tool guide (before changing X call Y), generated, under the length cap.
 
-### 7c Local UI (phase 10, planned)
+### 7c Local UI (phase 10)
 
 `codereach ui` opens a page on 127.0.0.1 with a random port and a one-time token in the URL, served by the
 tool from files inside the package (no npm, no build step). Screens in order of value: routes with auth

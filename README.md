@@ -69,6 +69,17 @@ entry points that reach OrderRepository.HardDeleteAsync(Guid)
   ...
 ```
 
+### A local page, if you prefer looking to asking
+
+```bash
+codereach ui --solution path/to/App.slnx
+```
+
+opens a page in your browser with a command bar (type a method, a route, `impact` or `di`) and a health
+report: endpoints without authorization, captive dependencies, unregistered services, and what your
+uncommitted changes reach. It is served by the tool itself on `127.0.0.1` with a one-time token, answers from
+the same tools as above, and stops with Ctrl+C. Nothing is hosted anywhere.
+
 CodeReach is a plain MCP server that runs entirely on your machine: no account, no hosted service, nothing
 sent anywhere. It installs no hooks, skills or agent profiles, never edits your client configuration, and
 writes nothing into the solution it analyses. Its index lives in your user cache directory.
