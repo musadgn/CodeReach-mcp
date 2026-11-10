@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>codereach</AssemblyName>
+    <RootNamespace>CodeReach.Mcp</RootNamespace>
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>codereach</ToolCommandName>
+    <PackageId>CodeReach.Mcp</PackageId>
+    <PackageType>McpServer</PackageType>
+    <Title>CodeReach</Title>
+    <Description>Roslyn MCP server for ASP.NET Core and C# solutions. Answers which endpoints and background jobs reach a piece of code, and what a git diff affects, from a compiler-accurate, persistent call graph.</Description>
+    <PackageTags>mcp;mcp-server;roslyn;aspnetcore;call-graph;static-analysis;code-analysis</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/musadgn/CodeReach-mcp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/musadgn/CodeReach-mcp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CodeReach.Core/CodeReach.Core.csproj" />
+    <ProjectReference Include="../CodeReach.Roslyn/CodeReach.Roslyn.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="ModelContextProtocol" />
+    <InternalsVisibleTo Include="CodeReach.Tests" />
+    <None Include=".mcp/server.json" Pack="true" PackagePath="/.mcp/" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

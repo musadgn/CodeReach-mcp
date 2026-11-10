@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "io.github.musadgn/codereach-mcp",
+  "description": "Roslyn MCP server for ASP.NET Core: which endpoints and jobs reach this code, and what does your diff affect.",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "nuget",
+      "registryBaseUrl": "https://api.nuget.org",
+      "identifier": "CodeReach.Mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [],
+      "environmentVariables": []
+    }
+  ],
+  "repository": {
+    "url": "https://github.com/musadgn/CodeReach-mcp",
+    "source": "github"
+  }
+}
