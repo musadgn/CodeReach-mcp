@@ -5,7 +5,7 @@ var positional = new List<string>();
 var named = new Dictionary<string, string>(StringComparer.Ordinal);
 for (var i = 0; i < args.Length; i++)
 {
-    if (args[i] is "--solution" or "--config" or "--cache-dir" && i + 1 < args.Length)
+    if (args[i] is "--solution" or "--config" or "--cache-dir" or "--port" && i + 1 < args.Length)
     {
         named[args[i]] = args[++i];
     }
@@ -28,7 +28,7 @@ if (command is "tools")
     return CliDoor.Clean;
 }
 
-if (command is not ("serve" or "call") || (command == "call" && positional.Count < 2))
+if (command is not ("serve" or "call" or "ui") || (command == "call" && positional.Count < 2))
 {
     Console.Error.WriteLine(
         """
@@ -37,6 +37,7 @@ if (command is not ("serve" or "call") || (command == "call" && positional.Count
           codereach [serve]                    run as an MCP server on stdio (the default)
           codereach call <tool> ['{json}']     run one tool and print its answer
           codereach tools                      list the tools and their arguments
+          codereach ui [--port N] [--no-open]  open a local page in the browser (127.0.0.1 only)
 
           --solution <path>    a .slnx, .sln or .csproj, or a directory holding exactly one (default: current directory)
           --config <path>      configuration file (default: codereach.json beside the solution)
@@ -77,6 +78,27 @@ if (command == "call")
 }
 
 host.Watch();
+if (command == "ui")
+{
+    var port = int.TryParse(named.GetValueOrDefault("--port"), out var chosen) && chosen is > 0 and < 65536 ? chosen : 0;
+    await using var server = UiServer.Start(host, port);
+    Console.WriteLine($"CodeReach UI for {Path.GetFileName(options.SolutionPath)}: {server.Url}");
+    Console.WriteLine("Only this machine can reach it. Press Ctrl+C to stop.");
+    if (!positional.Contains("--no-open"))
+    {
+        Browser.Open(server.Url);
+    }
+
+    try
+    {
+        await Task.Delay(Timeout.Infinite, cancellation.Token);
+    }
+    catch (OperationCanceledException)
+    {
+    }
+
+    return CliDoor.Clean;
+}
 
 await McpDoor.RunAsync(host, options, cancellation.Token);
 return CliDoor.Clean;

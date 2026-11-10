@@ -27,5 +27,6 @@
     <InternalsVisibleTo Include="CodeReach.Tests" />
     <None Include=".mcp/server.json" Pack="true" PackagePath="/.mcp/" />
     <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <EmbeddedResource Include="ui/*" LogicalName="CodeReach.Mcp.ui.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
