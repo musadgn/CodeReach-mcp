@@ -13,7 +13,7 @@
   --safe-wash: rgba(43, 110, 63, 0.09);
   --mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px; --space-12: 48px; --space-16: 64px;
-  --spring: cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  --settle: cubic-bezier(0.22, 1, 0.36, 1); /* ease-out-quint: a fast start that settles with no overshoot */
 }
 
 * { box-sizing: border-box; }
@@ -95,7 +95,7 @@ button { font: inherit; color: inherit; }
 #q::placeholder { color: var(--ink-faint); font-weight: 400; }
 #q:focus { outline: none; }
 .command-row:focus-within { box-shadow: 6px 6px 0 var(--ink); transform: translate(-3px, -3px); }
-.command-row { transition: transform 180ms var(--spring), box-shadow 180ms var(--spring); }
+.command-row { transition: transform 180ms var(--settle), box-shadow 180ms var(--settle); }
 
 .suggestions {
   position: absolute;
@@ -131,7 +131,7 @@ button { font: inherit; color: inherit; }
   text-transform: uppercase;
   letter-spacing: 0.08em;
   cursor: pointer;
-  transition: transform 140ms var(--spring);
+  transition: transform 140ms var(--settle);
 }
 
 .mode:active, .chip:active, .button:active { transform: scale(0.97); }
@@ -187,7 +187,7 @@ kbd { border: 1px solid var(--ink-faint); padding: 0 4px; font: inherit; }
   text-align: left;
   background: var(--paper);
   cursor: pointer;
-  transition: transform 160ms var(--spring), box-shadow 160ms var(--spring);
+  transition: transform 160ms var(--settle), box-shadow 160ms var(--settle);
 }
 
 .alarm:hover { transform: translate(-3px, -3px); box-shadow: 6px 6px 0 var(--ink); position: relative; z-index: 1; }
@@ -308,7 +308,7 @@ details > summary { cursor: pointer; margin-top: var(--space-4); color: var(--in
 @keyframes scan { from { transform: scaleX(0.1); } to { transform: scaleX(1); } }
 
 /* Rows arrive one after another, from the line they hang on. */
-.reveal { opacity: 0; transform: translateY(6px); animation: arrive 320ms var(--spring) forwards; animation-delay: calc(var(--i, 0) * 40ms); }
+.reveal { opacity: 0; transform: translateY(6px); animation: arrive 320ms var(--settle) forwards; animation-delay: calc(var(--i, 0) * 40ms); }
 
 @keyframes arrive { to { opacity: 1; transform: none; } }
 
