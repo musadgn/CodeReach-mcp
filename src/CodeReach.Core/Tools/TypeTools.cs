@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using CodeReach.Core.Facts;
 using CodeReach.Core.Graph;
 using CodeReach.Core.Queries;
@@ -126,6 +127,28 @@ internal static class TypeTools
         }
 
         ReachTools.Truncation(report, listed.Count, limit);
+        report.Data(new JsonObject
+        {
+            ["total"] = all.Count,
+            ["registrations"] = Data.Rows(listed.Take(limit), r => Data.Registration(TypeName(graph, r.Fact.Service), Implementation(graph, r), Lifetime(r), r)),
+            ["captive"] = Data.Rows(captive, c => new JsonObject
+            {
+                ["singleton"] = Data.Registration(TypeName(graph, c.Registration.Fact.Service), Implementation(graph, c.Registration), Lifetime(c.Registration), c.Registration),
+                ["dependency"] = TypeName(graph, c.Dependency.Fact.Type),
+                ["scoped"] = Data.Registration(TypeName(graph, c.Scoped.Fact.Service), Implementation(graph, c.Scoped), Lifetime(c.Scoped), c.Scoped),
+                ["constructor"] = Data.Symbol(graph, c.Dependency.Fact.Constructor),
+            }),
+            ["unregistered"] = Data.Rows(missing, g => new JsonObject
+            {
+                ["service"] = TypeName(graph, g.Key),
+                ["askedBy"] = Data.Rows(g, d => Data.Symbol(graph, d.Fact.Constructor)),
+            }),
+            ["duplicates"] = Data.Rows(duplicates, g => new JsonObject
+            {
+                ["service"] = TypeName(graph, g.Key),
+                ["registrations"] = Data.Rows(g, r => Data.Registration(TypeName(graph, r.Fact.Service), Implementation(graph, r), Lifetime(r), r)),
+            }),
+        });
         return report.Finish(lease, finding: captive.Count > 0 || missing.Count > 0);
     }
 

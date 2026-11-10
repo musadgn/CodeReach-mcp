@@ -13,8 +13,11 @@ public sealed record Param(
     string Name, ParamType Type, string Description, bool Required = false, int Default = 0, int Min = 0, int Max = 0,
     string[]? Options = null, int MaxLength = Limits.MaxSymbolLength);
 
-/// <summary><see cref="Finding"/> marks a complete answer that reports something wrong; the CLI exits 1 on it.</summary>
-public sealed record ToolResult(string Text, bool IsError = false, bool Finding = false);
+/// <summary>
+/// <see cref="Finding"/> marks a complete answer that reports something wrong; the CLI exits 1 on it.
+/// <see cref="Data"/> is the same answer as structured JSON, for screens; text-only tools leave it null.
+/// </summary>
+public sealed record ToolResult(string Text, bool IsError = false, bool Finding = false, JsonObject? Data = null);
 
 /// <summary>The graph a query runs on, with a notice when it is older than the files on disk.</summary>
 public sealed record GraphLease(CodeGraph Graph, string? Notice);
@@ -144,10 +147,17 @@ public sealed class Args
 internal sealed class Report
 {
     private readonly StringBuilder _text = new();
+    private JsonObject? _data;
 
     public Report Line(string line = "")
     {
         _text.Append(line).Append('\n');
+        return this;
+    }
+
+    public Report Data(JsonObject data)
+    {
+        _data = data;
         return this;
     }
 
@@ -160,6 +170,24 @@ internal sealed class Report
         var head = lease.Notice is null ? string.Empty : lease.Notice + "\n\n";
         return new ToolResult(
             $"{head}{_text.ToString().TrimEnd()}\n\n-- index generation {graph.Generation}, built {graph.BuiltAt:yyyy-MM-dd HH:mm:ss}Z; analysis: {completion}",
-            false, finding);
+            false, finding, Stamp(_data, graph, lease, completion));
+    }
+
+    private static JsonObject? Stamp(JsonObject? data, CodeGraph graph, GraphLease lease, string completion)
+    {
+        if (data is null)
+        {
+            return null;
+        }
+
+        data["index"] = new JsonObject
+        {
+            ["generation"] = graph.Generation,
+            ["builtAt"] = graph.BuiltAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+            ["complete"] = graph.Completion.IsComplete,
+            ["completion"] = completion,
+            ["notice"] = lease.Notice,
+        };
+        return data;
     }
 }

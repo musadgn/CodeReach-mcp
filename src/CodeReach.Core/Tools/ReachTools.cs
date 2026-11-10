@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using CodeReach.Core.Facts;
 using CodeReach.Core.Graph;
 using CodeReach.Core.Queries;
@@ -27,6 +28,11 @@ internal static class ReachTools
         }
 
         Truncation(report, matches.Count, args.Number("limit"));
+        report.Data(new JsonObject
+        {
+            ["total"] = matches.Count,
+            ["symbols"] = Data.Rows(matches.Take(args.Number("limit")), n => Data.Symbol(graph, n.Id)),
+        });
         return report.Finish(lease);
     }
 
@@ -127,7 +133,10 @@ internal static class ReachTools
         var report = new Report().Line($"entry points that reach {selection.Label}");
         Note(report, selection);
         WriteTrace(report, graph, trace, args.Number("limit"));
-        return report.Finish(lease);
+        var data = Data.Trace(graph, trace, args.Number("limit"));
+        data["target"] = selection.Label;
+        data["note"] = selection.Note;
+        return report.Data(data).Finish(lease);
     }
 
     public static void WriteTrace(Report report, CodeGraph graph, TraceResult trace, int limit)

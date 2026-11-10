@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using CodeReach.Core.Facts;
 using CodeReach.Core.Graph;
 using CodeReach.Core.Queries;
@@ -47,6 +48,16 @@ internal static class SurveyTools
         }
 
         ReachTools.Truncation(report, shown.Count, args.Number("limit"));
+        report.Data(new JsonObject
+        {
+            ["total"] = all.Count,
+            ["shown"] = shown.Count,
+            ["declared"] = all.Count(e => e.HasDeclaredAuth),
+            ["anonymous"] = all.Count(e => e.AllowsAnonymous),
+            ["none"] = open,
+            ["global"] = new JsonArray([.. GlobalAuthNotes(graph).Select(n => (JsonNode)n)]),
+            ["endpoints"] = Data.Rows(shown.Take(args.Number("limit")), e => Data.Endpoint(graph, e)),
+        });
         return report.Finish(lease);
     }
 
@@ -100,7 +111,8 @@ internal static class SurveyTools
             .Where(n => !n.IsTest && n.Fact.Kind is SymKind.Method && !graph.IsInterfaceMember(n.Id))
             .Select(n => (Node: n, Sites: graph.Callers(n.Id).Count(e => !e.Row.IsTest)))
             .Where(h => h.Sites > 0).OrderByDescending(h => h.Sites).ThenBy(h => h.Node.Id, StringComparer.Ordinal).Take(limit);
-        foreach (var (node, sites) in hot)
+        var hotList = hot.ToList();
+        foreach (var (node, sites) in hotList)
         {
             report.Line($"  {sites,5}  {node.Fact.Display}  {node.Location}");
         }
@@ -109,11 +121,32 @@ internal static class SurveyTools
         var contracts = graph.Types.Values.Where(t => t.Fact.IsInterface && !t.IsTest)
             .Select(t => (Type: t, Count: graph.Types.Values.Count(c => c.IsConcrete && !c.IsTest && c.BaseDefs.Contains(t.Id))))
             .Where(c => c.Count > 0).OrderByDescending(c => c.Count).ThenBy(c => c.Type.Id, StringComparer.Ordinal).Take(limit);
-        foreach (var (type, count) in contracts)
+        var contractList = contracts.ToList();
+        foreach (var (type, count) in contractList)
         {
             report.Line($"  {count,5}  {Render.Symbol(graph, type.Id)}");
         }
 
+        report.Data(new JsonObject
+        {
+            ["solution"] = Path.GetFileName(graph.Facts.SolutionPath),
+            ["documents"] = graph.Facts.Documents.Length,
+            ["symbols"] = declared.Count,
+            ["references"] = graph.Refs.Count,
+            ["endpoints"] = graph.Endpoints.Count(e => !e.IsTest),
+            ["projects"] = Data.Rows(graph.Projects.Values.OrderBy(p => p.Name, StringComparer.Ordinal), p => new JsonObject
+            {
+                ["name"] = p.Name,
+                ["documents"] = p.Documents,
+                ["test"] = p.IsTest,
+                ["failed"] = p.LoadFailure,
+                ["uses"] = Data.Rows(cross.Where(c => c.Key.From == p.Name).OrderByDescending(c => c.Value), c => new JsonObject { ["project"] = c.Key.Project, ["references"] = c.Value }),
+            }),
+            ["entryPoints"] = Data.Rows(graph.EntryPoints.Values.SelectMany(l => l).Where(e => !graph.Node(e.Symbol).IsTest).GroupBy(e => e.Kind).OrderBy(g => g.Key, StringComparer.Ordinal),
+                g => new JsonObject { ["kind"] = g.Key, ["count"] = g.Count() }),
+            ["mostCalled"] = Data.Rows(hotList, h => { var item = Data.Symbol(graph, h.Node.Id); item["sites"] = h.Sites; return item; }),
+            ["mostImplemented"] = Data.Rows(contractList, c => { var item = Data.Symbol(graph, c.Type.Id); item["implementations"] = c.Count; return item; }),
+        });
         return report.Finish(lease);
     }
 
@@ -227,6 +260,28 @@ internal static class SurveyTools
         }
 
         ReachTools.Truncation(report, dead.Count, limit);
+        report.Data(new JsonObject
+        {
+            ["source"] = source,
+            ["files"] = changes.Count,
+            ["unmapped"] = new JsonArray([.. unmapped.Select(u => (JsonNode)u)]),
+            ["changed"] = Data.Rows(changed.Values.OrderBy(c => c.Id, StringComparer.Ordinal), c => Data.Symbol(graph, c.Id)),
+            ["endpoints"] = Data.Rows(endpoints, e =>
+            {
+                var item = Data.Endpoint(graph, e);
+                item["because"] = new JsonArray([.. affected[e.Handler].Distinct().Select(c => (JsonNode)c)]);
+                return item;
+            }),
+            ["entryPoints"] = Data.Rows(entries.Where(e => e.Kind != "endpoint").OrderBy(e => e.Label, StringComparer.Ordinal), e =>
+            {
+                var item = Data.Symbol(graph, e.Symbol);
+                item["entryKind"] = e.Kind;
+                item["entryLabel"] = e.Label;
+                item["because"] = new JsonArray([.. affected[e.Symbol].Distinct().Select(c => (JsonNode)c)]);
+                return item;
+            }),
+            ["unreached"] = Data.Rows(dead, d => Data.Symbol(graph, d.Id)),
+        });
         return report.Finish(lease);
     }
 
