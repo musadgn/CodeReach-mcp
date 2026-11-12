@@ -2,13 +2,13 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
   "name": "io.github.musadgn/codereach-mcp",
   "description": "ASP.NET Core MCP server: which endpoints and jobs reach this code, and what your diff affects.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "packages": [
     {
       "registryType": "nuget",
       "registryBaseUrl": "https://api.nuget.org/v3/index.json",
       "identifier": "CodeReach.Mcp",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "transport": {
         "type": "stdio"
       },
