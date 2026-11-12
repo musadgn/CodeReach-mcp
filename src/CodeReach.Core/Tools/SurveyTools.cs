@@ -98,7 +98,7 @@ internal static class SurveyTools
         {
             var uses = cross.Where(c => c.Key.From == project.Name).OrderByDescending(c => c.Value).Select(c => $"{c.Key.Project} ({c.Value})");
             var test = project.IsTest ? $"  [test: {project.TestEvidence}]" : string.Empty;
-            var skipped = project.Skipped > 0 ? $", {project.Skipped} not indexed" : string.Empty;
+            var skipped = project.Skipped > 0 ? $", {project.Skipped} not indexed{Why(project)}" : string.Empty;
             report.Line($"  {project.Name}: {project.Documents} documents{skipped}{test}");
             report.Line($"      -> {(cross.Keys.Any(k => k.From == project.Name) ? string.Join(", ", uses) : "nothing in the solution")}");
         }
@@ -162,7 +162,7 @@ internal static class SurveyTools
         {
             var state = project.LoadFailure is null ? "ok" : "FAILED: " + project.LoadFailure;
             var test = project.IsTest ? $", test project ({project.TestEvidence})" : string.Empty;
-            report.Line($"  {project.Name}: {project.Documents} documents, {project.Skipped} not indexed{test}; {state}");
+            report.Line($"  {project.Name}: {project.Documents} documents, {project.Skipped} not indexed{Why(project)}{test}; {state}");
         }
 
         report.Line($"config: exclude=[{string.Join(", ", config.Exclude)}] authAttributes=[{string.Join(", ", config.AuthAttributes)}] "
@@ -193,12 +193,32 @@ internal static class SurveyTools
     public static async Task<ToolResult> Impact(IIndexHost host, Args args, CancellationToken cancel)
     {
         var diff = args.Text("diff");
-        var source = diff is not null ? "the diff passed in" : $"working tree vs {args.Text("base") ?? "HEAD"}";
-        diff ??= await host.GitDiffAsync(args.Text("base"), cancel).ConfigureAwait(false);
+        var planned = args.Text("symbol");
+        if (planned is not null && (diff is not null || args.Text("base") is not null))
+        {
+            throw new ToolRefusal(Codes.ValidationFailed, "impact: pass symbol, or a diff or base, not both.");
+        }
+
+        var source = planned is not null ? $"a change to {planned}" : diff is not null ? "the diff passed in" : $"working tree vs {args.Text("base") ?? "HEAD"}";
+        if (planned is null)
+        {
+            diff ??= await host.GitDiffAsync(args.Text("base"), cancel).ConfigureAwait(false);
+        }
+
         var lease = await host.AcquireAsync(cancel).ConfigureAwait(false);
         var graph = lease.Graph;
-        var changes = DiffParser.Parse(diff);
+        var changes = planned is null ? DiffParser.Parse(diff!) : [];
         var changed = new Dictionary<string, SymbolNode>(StringComparer.Ordinal);
+        if (planned is not null)
+        {
+            var selection = SymbolResolver.Resolve(graph, planned);
+            source = $"a change to {selection.Label}";
+            foreach (var node in selection.Symbols)
+            {
+                changed.TryAdd(node.Id, node);
+            }
+        }
+
         var unmapped = new List<string>();
         foreach (var change in changes)
         {
@@ -239,7 +259,7 @@ internal static class SurveyTools
         var entries = affected.Keys.Select(id => graph.EntryPoints[id][0]).ToList();
         var endpoints = graph.Endpoints.Where(e => affected.ContainsKey(e.Handler)).ToList();
         var report = new Report()
-            .Line($"impact of {source}: {changes.Count} files, {changed.Count} changed symbols -> {endpoints.Count} endpoints and {entries.Count(e => e.Kind != "endpoint")} other entry points affected.");
+            .Line($"impact of {source}: {(planned is null ? $"{changes.Count} files, " : string.Empty)}{changed.Count} changed symbols -> {endpoints.Count} endpoints and {entries.Count(e => e.Kind != "endpoint")} other entry points affected.");
         if (unmapped.Count > 0)
         {
             report.Line($"Not analysed ({unmapped.Count} files that are not indexed C# sources, or were deleted): {string.Join(", ", unmapped.Take(10))}{(unmapped.Count > 10 ? ", ..." : string.Empty)}");
@@ -316,6 +336,9 @@ internal static class SurveyTools
             }
         }
     }
+
+    private static string Why(ProjectFact project) =>
+        project.Skipped > 0 && project.SkipDetail.Length > 0 ? $" ({project.SkipDetail})" : string.Empty;
 
     private static IEnumerable<string> GlobalAuthNotes(CodeGraph graph)
     {

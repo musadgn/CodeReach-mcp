@@ -9,7 +9,7 @@ namespace CodeReach.Core.Facts;
 public static class FactsSerializer
 {
     /// <summary>Bumped on any change to the facts model or this layout. Older files are discarded, never migrated.</summary>
-    public const int FormatVersion = 2;
+    public const int FormatVersion = 3;
 
     private const uint Magic = 0x43524658; // "CRFX"
 
@@ -31,6 +31,7 @@ public static class FactsSerializer
             writer.Write(p.Documents);
             writer.Write(p.Skipped);
             Optional(p.LoadFailure);
+            Text(p.SkipDetail);
         });
         List(facts.Documents, d =>
         {
@@ -185,7 +186,7 @@ public static class FactsSerializer
         var strings = new List<string>();
         var solution = Text();
         var root = Text();
-        var projects = List(() => new ProjectFact(Text(), Text(), reader.ReadBoolean(), Text(), List(Text), reader.ReadInt32(), reader.ReadInt32(), Optional()));
+        var projects = List(() => new ProjectFact(Text(), Text(), reader.ReadBoolean(), Text(), List(Text), reader.ReadInt32(), reader.ReadInt32(), Optional(), Text()));
         var documents = List(() => new DocumentFacts(
             Text(), Text(), Text(), reader.ReadInt32(),
             List(() => new SymbolFact(

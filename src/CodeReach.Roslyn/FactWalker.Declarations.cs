@@ -105,7 +105,8 @@ internal sealed partial class FactWalker
 
             if (member is IMethodSymbol { MethodKind: MethodKind.Constructor } && reference.Span == node.Span)
             {
-                Declare(member, node);
+                // A primary constructor spans only its parameter list: an edit elsewhere in the type does not change it.
+                Declare(member, node is TypeDeclarationSyntax { ParameterList: { } parameters } ? parameters : node, node);
             }
             else if (member is IPropertySymbol && reference.GetSyntax(_cancel) is ParameterSyntax parameter && node.Span.Contains(parameter.Span))
             {

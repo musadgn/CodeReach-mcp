@@ -80,8 +80,10 @@ public sealed record DocumentFacts(
     ServiceFact[] Services,
     DependencyFact[] Dependencies);
 
+/// <summary><see cref="SkipDetail"/> says why <see cref="Skipped"/> documents were not indexed, as counted reasons.</summary>
 public sealed record ProjectFact(
-    string Name, string Path, bool IsTest, string TestEvidence, string[] References, int Documents, int Skipped, string? LoadFailure);
+    string Name, string Path, bool IsTest, string TestEvidence, string[] References, int Documents, int Skipped, string? LoadFailure,
+    string SkipDetail = "");
 
 /// <summary>Everything the indexer produces. Paths are relative to <see cref="Root"/> with forward slashes.</summary>
 public sealed record IndexFacts(

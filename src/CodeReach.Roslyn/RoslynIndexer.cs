@@ -17,7 +17,7 @@ public sealed record SourceChanges(IReadOnlyList<string> Changed, IReadOnlyList<
 public sealed class RoslynIndexer : IDisposable
 {
     /// <summary>Bumped whenever extraction would produce different facts for the same source.</summary>
-    public const int ExtractorVersion = 2;
+    public const int ExtractorVersion = 3;
 
     private static readonly string[] TestFrameworkAssemblies =
     [
@@ -185,7 +185,7 @@ public sealed class RoslynIndexer : IDisposable
                 var compilation = await project.GetCompilationAsync(cancel).ConfigureAwait(false);
                 if (compilation is null)
                 {
-                    projectFacts.Add(Describe(project, 0, 0, "no compilation was produced"));
+                    projectFacts.Add(Describe(project, 0, 0, "no compilation was produced", string.Empty));
                     continue;
                 }
 
@@ -201,7 +201,7 @@ public sealed class RoslynIndexer : IDisposable
                 }).ConfigureAwait(false);
             }
 
-            projectFacts.Add(Describe(project, included.Count, project.DocumentIds.Count - included.Count, null));
+            projectFacts.Add(Describe(project, included.Count, project.DocumentIds.Count - included.Count, null, SkipSummary(project)));
         }
 
         LastExtracted = done;
@@ -259,7 +259,7 @@ public sealed class RoslynIndexer : IDisposable
         return chosen;
     }
 
-    private ProjectFact Describe(Project project, int documents, int skipped, string? failure)
+    private ProjectFact Describe(Project project, int documents, int skipped, string? failure, string skipDetail)
     {
         var evidence = project.MetadataReferences.OfType<PortableExecutableReference>()
             .Select(r => Path.GetFileName(r.FilePath) ?? string.Empty)
@@ -270,21 +270,50 @@ public sealed class RoslynIndexer : IDisposable
         return new ProjectFact(
             project.Name, Relative(project.FilePath ?? project.Name), evidence is not null || configured,
             evidence is not null ? "references " + evidence : configured ? "listed in testProjects" : string.Empty,
-            references, documents, skipped, failure);
+            references, documents, skipped, failure, skipDetail);
     }
 
-    private bool Included(Document document)
+    private bool Included(Document document) => SkipReason(document) is null;
+
+    /// <summary>Why a document is not indexed, or null when it is.</summary>
+    private string? SkipReason(Document document)
     {
         if (document.FilePath is null || !document.SupportsSyntaxTree)
         {
-            return false;
+            return "no source file";
         }
 
         var path = Relative(document.FilePath);
+        if (path.StartsWith("..", StringComparison.Ordinal))
+        {
+            return "outside the solution folder";
+        }
+
         var segments = path.Split('/');
-        var generated = segments.Contains("obj") || segments.Contains("bin") || path.StartsWith("..", StringComparison.Ordinal);
-        return !generated && _exclude?.Match(path).HasMatches != true;
+        if (segments.Contains("obj") || segments.Contains("bin"))
+        {
+            return "generated (obj/bin)";
+        }
+
+        if (_exclude?.Match(path).HasMatches == true)
+        {
+            var pattern = _config.Exclude.FirstOrDefault(p =>
+            {
+                var single = new Matcher(StringComparison.OrdinalIgnoreCase);
+                single.AddInclude(p);
+                return single.Match(path).HasMatches;
+            });
+            return "excluded by " + (pattern ?? "configuration");
+        }
+
+        return null;
     }
+
+    private string SkipSummary(Project project) => string.Join(", ", project.Documents
+        .Select(SkipReason).OfType<string>()
+        .GroupBy(r => r, StringComparer.Ordinal)
+        .OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal)
+        .Select(g => $"{g.Count()} {g.Key}"));
 
     private string Relative(string path) => Path.GetRelativePath(Root, path).Replace('\\', '/');
 }

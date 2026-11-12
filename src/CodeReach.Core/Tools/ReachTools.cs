@@ -65,7 +65,8 @@ internal static class ReachTools
         var graph = lease.Graph;
         var selection = SymbolResolver.Resolve(graph, args.Required("symbol"));
         var all = selection.Symbols.SelectMany(s => graph.Callees(s.Id)).ToList();
-        all = all.Where(e => graph.Node(e.Target).Fact.Kind != SymKind.Field).ToList();
+        // Instance fields are plumbing; constants and static fields (permission keys, settings names) are part of what code uses.
+        all = all.Where(e => graph.Node(e.Target).Fact.Kind != SymKind.Field || IsStaticOrConstant(graph.Node(e.Target))).ToList();
         var external = args.Flag("include_external") ? all : all.Where(e => !graph.Node(e.Target).IsExternal).ToList();
         var targets = external.GroupBy(e => e.Target).OrderBy(g => g.Min(e => e.Row.Fact.Line)).ToList();
         var report = new Report().Line($"callees of {selection.Label}");
@@ -182,6 +183,10 @@ internal static class ReachTools
             report.Line($"  ... {total - limit} more not shown (limit={limit}; raise it up to {Limits.MaxRows}).");
         }
     }
+
+    /// <summary>Source fields carry their modifiers; a metadata field is shown only when it is a constant-like read.</summary>
+    private static bool IsStaticOrConstant(SymbolNode node) =>
+        (node.Fact.Flags & SymFlags.Static) != 0 || node.IsExternal;
 
     public static void Note(Report report, Selection selection)
     {

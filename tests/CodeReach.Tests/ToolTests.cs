@@ -109,6 +109,45 @@ public sealed class ToolTests(SampleFixture sample)
     }
 
     [Fact]
+    public async Task Impact_of_a_planned_change_to_a_symbol_equals_its_trace()
+    {
+        var planned = await Call("impact", """{"symbol":"OrderRepository.HardDeleteAsync"}""");
+        var refused = await Call("impact", """{"symbol":"OrderRepository.HardDeleteAsync","base":"main"}""");
+
+        Assert.Contains("impact of a change to OrderRepository.HardDeleteAsync(Guid): 1 changed symbols -> 3 endpoints and 1 other entry points affected", planned.Text, StringComparison.Ordinal);
+        Assert.Contains("[hosted-service] OrderPurgeService", planned.Text, StringComparison.Ordinal);
+        Assert.StartsWith("VALIDATION_FAILED: impact: pass symbol, or a diff or base, not both.", refused.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_edit_inside_a_method_does_not_change_the_primary_constructor()
+    {
+        // OrdersController has a primary constructor; line 19 is inside Delete's body.
+        const string diff = """
+            --- a/src/Shop.Api/Controllers/OrdersController.cs
+            +++ b/src/Shop.Api/Controllers/OrdersController.cs
+            @@ -19 +19 @@
+            -x
+            +y
+            """;
+        var result = await Call("impact", JsonSerializer.Serialize(new { diff }));
+
+        Assert.Contains("1 files, 1 changed symbols", result.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("OrdersController.OrdersController(", result.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Callees_include_constants_and_status_says_why_files_were_not_indexed()
+    {
+        var callees = await Call("callees", """{"symbol":"OrdersController.Delete"}""");
+        var status = await Call("status", "{}");
+
+        Assert.Contains("PermissionKeys.Orders.Delete", callees.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("OrdersController.orders ", callees.Text, StringComparison.Ordinal);
+        Assert.Contains("not indexed (3 generated (obj/bin), 1 excluded by **/Migrations/**)", status.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Impact_of_an_edit_outside_any_declaration_is_nothing()
     {
         const string diff = """
