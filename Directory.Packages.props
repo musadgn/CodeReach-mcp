@@ -5,8 +5,8 @@
   <ItemGroup>
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.9.0" />
-    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="11.0.0" />
     <PackageVersion Include="ModelContextProtocol" Version="2.4.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.3" />
   </ItemGroup>
